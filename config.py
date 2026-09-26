@@ -43,9 +43,12 @@ def horaires_poste(code, jour):
     M/S/12 ont des horaires fixes ; N dépend du jour de la semaine.
     """
     if code == "N":
-        s, e = NUIT_PAR_SEMAINE.get(jour.weekday(), NUIT_PAR_SEMAINE["default"])
         if jour.isoformat() in JOURS_FERIES:
-            s = 20 * 60  # nuit de jour férié : début 20h00 (fin à confirmer)
+            # Nuit de jour férié : début 20h00, fin selon jour
+            #   semaine (lun-ven) → 7h15, week-end (sam-dim) → 8h00
+            fin = 1440 + (7 * 60 + 15) if jour.weekday() < 5 else 1440 + (8 * 60)
+            return 20 * 60, fin
+        s, e = NUIT_PAR_SEMAINE.get(jour.weekday(), NUIT_PAR_SEMAINE["default"])
         return s, e
     p = POSTES[code]
     return p["start_min"], p["start_min"] + p["duree_min"]
@@ -62,13 +65,13 @@ ANNOTATIONS = {
 
 # Codes d'absence / statut vus dans la grille (non modélisés comme postes). À confirmer.
 CODES_ABSANCE = {
-    "dp": "à confirmer (détachement / double poste ?)",
+    "dp": "dispense de prestation (journée)",
     "DDI": "à confirmer (détachement ?)",
-    "FO": "à confirmer (formation obligatoire ?)",
+    "FO": "journée formation (obligatoire)",
     "U": "à confirmer",
     "IC": "infirmière en chef (poste dédié, confirmé par le rôle)",
     "🌴": "congé / vacances",
-    "❓": "absence longue non justifiée / statut en attente (rouge)",
+    "❓": "maladie (dans certains cas)",
 }
 
 # Rôles reconnus par le solveur (champ "role" des agents).
