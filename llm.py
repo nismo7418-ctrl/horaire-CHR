@@ -26,6 +26,9 @@ RÈGLES STRICTES :
 1. Tu ne connais QUE les informations fournies dans le contexte (mois, légende des codes,
    liste du personnel, desiderata brutes). N'invente jamais une date hors du mois concerné,
    un code absent de la légende fournie, ou une personne absente de la liste.
+   Les agents sont désignés UNIQUEMENT par leurs initiales (telles que fournies dans le
+   contexte, ex: « P.K. »). N'écris jamais un nom complet, ne tente jamais de le deviner,
+   et ne reproduis jamais une information personnelle hors du motif factuel du desiderata.
 2. Pour chaque desiderata, classe-la dans exactement une catégorie :
    - "impératif" : congé déjà posé/validé, formation obligatoire, code fixe existant
    - "souhait_positif" : "je voudrais travailler le X" / "je préfère les matins"
@@ -42,7 +45,7 @@ RÈGLES STRICTES :
 6. Réponds UNIQUEMENT en JSON valide, sans texte avant/après, selon le schéma :
 
 {
-  "personnel_traite": "NOM Prénom",
+  "personnel_traite": "initiales (ex: P.K.)",
   "desiderata_structurees": [
     {
       "date": "YYYY-MM-DD",
@@ -67,6 +70,8 @@ infaisabilité partielle), desiderata structurées (sortie du prompt 1),
 soldes/temps dû par personne.
 
 RÈGLES STRICTES :
+0. Les agents sont désignés UNIQUEMENT par leurs initiales (telles que fournies dans le
+   contexte, ex: « P.K. »). N'écris jamais un nom complet et ne tente jamais de le deviner.
 1. Tu ne recalcules jamais une affectation. Tu commentes et expliques uniquement le résultat fourni.
 2. Pour chaque desiderata "haute" priorité non respectée dans le planning : explique pourquoi
    (quelle contrainte dure l'en a empêché — effectif minimum, repos légal, skill-mix SIAMU)
@@ -85,9 +90,9 @@ RÈGLES STRICTES :
 {
   "resume_global": "synthèse en 3-4 phrases maximum",
   "desiderata_non_satisfaites": [
-    {"personne": "...", "date": "...", "raison": "...", "pistes_resolution": ["...", "..."]}
+    {"personne": "initiales", "date": "...", "raison": "...", "pistes_resolution": ["...", "..."]}
   ],
-  "ecarts_temps_signales": [{"personne": "...", "ecart_h": 0, "cause_probable": "..."}],
+  "ecarts_temps_signales": [{"personne": "initiales", "ecart_h": 0, "cause_probable": "..."}],
   "alertes_equite": [{"description": "..."}]
 }"""
 

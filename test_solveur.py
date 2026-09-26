@@ -17,7 +17,7 @@ with open("data/effectifs_min.json", encoding="utf-8") as f:
 
 # Desiderata structurées d'exemple (format = sortie du Prompt 1)
 desiderata = {
-    "PEETERS Karine": {
+    "P.K.": {
         "structurees": [
             {"date": "2026-10-06", "categorie": "impératif", "poste_concerne": None,
              "priorite": "haute", "motif_resume": "congé validé"},
@@ -26,7 +26,7 @@ desiderata = {
         ],
         "a_clarifier": [], "conflits_detectes": [],
     },
-    "VERHAEGEN Lucas": {
+    "V.L.": {
         "structurees": [
             {"date": "2026-10-22", "categorie": "indisponibilite", "poste_concerne": None,
              "priorite": "haute", "motif_resume": "RDV médical"},
@@ -35,28 +35,28 @@ desiderata = {
         ],
         "a_clarifier": [], "conflits_detectes": [],
     },
-    "NOEL Marion": {
+    "N.M.": {
         "structurees": [
             {"date": "2026-10-08", "categorie": "impératif", "poste_concerne": None,
              "priorite": "haute", "motif_resume": "formation SIAU obligatoire"},
         ],
         "a_clarifier": [], "conflits_detectes": [],
     },
-    "DUBOIS Elise": {
+    "D.E.": {
         "structurees": [
             {"date": "2026-10-03", "categorie": "indisponibilite", "poste_concerne": None,
              "priorite": "haute", "motif_resume": "garde enfant malade"},
         ],
         "a_clarifier": [], "conflits_detectes": [],
     },
-    "GOETHALS Anaïs": {
+    "G.A.": {
         "structurees": [
             {"date": "2026-10-09", "categorie": "indisponibilite", "poste_concerne": "matin",
              "priorite": "moyenne", "motif_resume": "RDV dentiste le matin"},
         ],
         "a_clarifier": [], "conflits_detectes": [],
     },
-    "MERTENS Julie": {
+    "M.J.": {
         "structurees": [
             {"date": "2026-10-21", "categorie": "impératif", "poste_concerne": None,
              "priorite": "haute", "motif_resume": "congé validé"},
@@ -84,9 +84,9 @@ if result["statut"] in ("OPTIMAL", "FEASIBLE"):
         print(f"  {nom:22s} {s['heures']:5.0f} h / cible {s['cible']:5.1f} h | nuits={s['nuits']} wknd={s['jours_weekend']}")
     # Vérifications ponctuelles
     grille = result["grille"]
-    assert grille["2026-10-06"].get("PEETERS Karine", "x") == "", "congé 06/10 non respecté"
-    assert grille["2026-10-08"].get("NOEL Marion", "x") == "", "formation 08/10 non respectée"
-    assert grille["2026-10-04"].get("SIMONSENS Thierry", "x") == "", "affectation fixe 04/10 absente"
+    assert grille["2026-10-06"].get("P.K.", "x") == "", "congé 06/10 non respecté"
+    assert grille["2026-10-08"].get("N.M.", "x") == "", "formation 08/10 non respectée"
+    assert grille["2026-10-04"].get("S.T.", "x") == "", "affectation fixe 04/10 absente"
     print("\nVérifications ponctuelles : OK")
 else:
     print(result.get("info_solveur"))

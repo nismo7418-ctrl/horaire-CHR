@@ -4,7 +4,7 @@ N'importe quelle valeur métier vient de config.py. Entrées :
   mois          "2026-10"
   personnel     liste de dicts (voir data/personnel.json)
   effectifs_min {"siamu": {"M": 3, "S": 3, "N": 2}, ...}
-  desiderata    {"NOM Prénom": {"structurees": [...], "a_clarifier": [...]}}
+  desiderata    {"initiales": {"structurees": [...], "a_clarifier": [...]}}  (ex: "P.K.")
                 (sortie du Prompt 1, champ "desiderata_structurees")
 
 Sortie : dict {statut, grille, heures, stats, warnings, info_solveur}
