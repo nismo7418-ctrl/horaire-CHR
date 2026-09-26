@@ -226,6 +226,29 @@ def resoudre(mois: str,
                 else:
                     pos_terms.append(t[pi, d] * ppos.get(prio, 50))
 
+    # ── S4 : habitudes horaires (bonus si l'agent tient son poste habituel) ─
+    # "habitudes" de l'agent : {jour de semaine : code poste | [codes] | libellé français}
+    for p in P:
+        hab = personnel[p].get("habitudes")
+        if not hab:
+            continue
+        par_jour: dict[int, list[str]] = {}
+        for cle, val in hab.items():
+            j = config.JOURS_SEMAINE.get(str(cle).lower())
+            if j is None:
+                warnings.append(f"{personnel[p]['nom']} : jour d'habitude inconnu '{cle}' ignoré")
+                continue
+            codes_hab = val if isinstance(val, list) else [val]
+            for _c in codes_hab:
+                code = _c if _c in config.POSTES else _normaliser_poste(_c)
+                if code:
+                    par_jour.setdefault(j, []).append(code)
+        for d in range(nb):
+            codes_jour = par_jour.get(jours[d].weekday())
+            if codes_jour:
+                for c in set(codes_jour):
+                    pos_terms.append(x[p, d, c] * config.POIDS["habitude"])
+
     # ── S3 : équité des nuits et des week-ends au sein de chaque rôle ───
     equite_terms = []
     for role in {p_["role"] for p_ in personnel if p_.get("role") in config.ROLES}:

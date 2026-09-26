@@ -101,7 +101,12 @@ POIDS = {
     "souhait_positif": {"haute": 100, "moyenne": 50,  "basse": 25},
     "equite_nuits": 10,    # minimise le max de nuits par personne dans un rôle
     "equite_weekends": 5,  # minimise le max de jours week-end travaillés par rôle
+    "habitude": 60,        # bonus si l'agent fait son poste habituel le jour concerné (S4)
 }
+
+# Noms de jours acceptés dans "habitudes" des agents (personnel.json) → weekday python.
+JOURS_SEMAINE = {"lun": 0, "mar": 1, "mer": 2, "jeu": 3, "ven": 4, "sam": 5, "dim": 6,
+                 "0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6}
 
 # Paramètres de résolution.
 TIME_LIMIT_S = 30
