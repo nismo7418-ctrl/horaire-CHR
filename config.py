@@ -71,7 +71,8 @@ CODES_ABSANCE = {
     "U": "à confirmer",
     "IC": "infirmière en chef (poste dédié, confirmé par le rôle)",
     "🌴": "congé / vacances",
-    "❓": "maladie (dans certains cas)",
+    "❓ (fond jaune)": "journée formation (généralement — cf. FO)",
+    "❓ (fond rouge)": "maladie (dans certains cas)",
 }
 
 # Rôles reconnus par le solveur (champ "role" des agents).
