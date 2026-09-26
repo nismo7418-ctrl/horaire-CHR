@@ -11,6 +11,10 @@ Architecture en 3 briques, un seul processus Python :
 **Le LLM ne génère jamais la grille** — il structure les desiderata en amont et explique
 le résultat en aval. Une hallucination du modèle ne peut pas corrompre une affectation.
 
+**Anonymisation** — les agents sont désignés UNIQUEMENT par leurs initiales (ex: « P.K. »)
+dans les données, les prompts LLM, la grille et les exports. Aucun nom complet n'est
+stocké ni reproduit (les prompts l'interdisent explicitement au modèle).
+
 ## Fichiers
 
 | Fichier | Rôle |
@@ -51,9 +55,12 @@ week-ends au sein de chaque rôle.
 
 ## ⚠️ À VALIDER AVANT MISE EN PRODUCTION
 
-1. **Horaires réels des postes** (`config.POSTES`) — les valeurs courantes sont des exemples.
-2. **Légende des codes** (IC, HP, ino, DDI, FO, CB, SR, case rouge) — à confirmer avec le
-   service planification ; un code non reconnu en `affectations_fixes` force une absence.
+1. **Horaires réels des postes** — M/S/12h et nuits par jour confirmés ; nuit de jour férié
+   (20h00→7h15 semaine / 8h00 WE) confirmée. `config.JOURS_FERIES` à compléter mois par mois.
+2. **Légende des codes** — confirmés : FO (formation), dp (dispense de prestation),
+   ❓ jaune (formation), ❓ rouge (maladie), 🌴 (congé), SR/HP (annotations SMUR / hospitalisation
+   provisoire). Restent à confirmer : `DDI`, `U` ; un code non reconnu en `affectations_fixes`
+   force une absence + avertissement.
 3. **Bases légales** (repos 11h — loi 16/03/1971 ; nuit 8h en 21h-6h — loi 17/02/1997 ;
    repos hebdo 35h) sont des **approximations CP-SAT** à valider avec RH / CCT 46 / CP330.
    La règle 21h-6h ≤ 8h est appliquée via `config.NIGHT_HOURS_MAX` et
