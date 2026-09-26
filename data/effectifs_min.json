@@ -1,0 +1,6 @@
+{
+  "siamu":         {"M": 1, "N": 1},
+  "infirmier":     {"M": 2},
+  "aide_soignant": {"M": 1},
+  "logistique":    {"S": 1}
+}
