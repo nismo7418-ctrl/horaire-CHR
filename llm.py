@@ -67,6 +67,7 @@ JAMAIS de modifier les affectations toi-même.
 CONTEXTE FOURNI : planning généré (grille personne/jour/poste), liste des contraintes
 dures violées ou impossibles à satisfaire simultanément (si le solveur est en
 infaisabilité partielle), desiderata structurées (sortie du prompt 1),
+habitudes horaires hebdomadaires par agent (contrainte souple — bonus « poste habituel »),
 soldes/temps dû par personne.
 
 RÈGLES STRICTES :

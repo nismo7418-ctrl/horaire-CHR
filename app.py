@@ -1,4 +1,4 @@
-"""App Streamlit — Planning Urgences CHR Haute Senne.
+"""App Streamlit — Planning du service des urgences.
 
 Flux : 1) Désiderata (LLM Prompt 1) → 2) Génération (solveur CP-SAT) → 3) Résultats (LLM Prompt 2 + export).
 Lancement : streamlit run app.py
@@ -17,7 +17,7 @@ import exporter
 import llm
 import solveur
 
-st.set_page_config(page_title="Planning Urgences — CHR Haute Senne", layout="wide", page_icon="🏥")
+st.set_page_config(page_title="Planning Urgences", layout="wide", page_icon="🏥")
 
 FICHIERS = {"personnel": "data/personnel.json", "effectifs_min": "data/effectifs_min.json"}
 
@@ -37,7 +37,10 @@ if "personnel" not in st.session_state:
     st.session_state.planning: dict | None = None
     st.session_state.explication: dict | None = None
 
-st.title("Planning Urgences — CHR Haute Senne Soignies")
+st.title("Planning — Service des urgences")
+
+st.caption("Projet conforme RGPD : anonymisé par initiales, aucun nom d'établissement, "
+           "aucune donnée nominative stockée. LLM 100% local.")
 
 with st.sidebar:
     st.header("Paramètres")
@@ -149,6 +152,44 @@ with tab2:
     st.write(f"- **Personnel** : {len(st.session_state.personnel)} agents")
     st.write(f"- **Effectifs min/jour** : {st.session_state.effectifs_min}")
     st.write(f"- **Desiderata structurées** : {n_des}")
+
+    # ── Habitudes hebdomadaires (contrainte souple S4) ─────────────────────
+    st.markdown("#### Habitudes horaires du personnel (contrainte souple — bonus « poste habituel »)")
+    st.caption("Pour chaque agent : le poste tenu habituellement chaque jour de semaine. "
+               "« Indifférent » = aucune préférence ce jour-là. Enregistré dans `data/personnel.json`.")
+    JOURS_UI = ["lun", "mar", "mer", "jeu", "ven", "sam", "dim"]
+    OPTIONS_UI = ["Indifférent", "M (matin)", "S (soir)", "N (nuit)", "12 (12h)"]
+    code_par_option = {"Indifférent": None, "M (matin)": "M", "S (soir)": "S", "N (nuit)": "N", "12 (12h)": "12"}
+    for agent in st.session_state.personnel:
+        hab = agent.get("habitudes") or {}
+        cols = st.columns([2] + [1] * 7)
+        with cols[0]:
+            st.write(agent["nom"])
+        for j, nom_j in enumerate(JOURS_UI):
+            with cols[j + 1]:
+                cur = hab.get(nom_j)
+                cur = cur if isinstance(cur, str) and cur in config.POSTES else None
+                idx = OPTIONS_UI.index(next(o for o, c in code_par_option.items() if c == cur)) if cur else 0
+                st.selectbox(nom_j, OPTIONS_UI, index=idx, key=f"hab_{agent['nom']}_{j}")
+    c3, c4 = st.columns(2)
+    with c3:
+        if st.button("💾 Enregistrer les habitudes (personnel.json)"):
+            for agent in st.session_state.personnel:
+                hab = {}
+                for j, nom_j in enumerate(JOURS_UI):
+                    v = code_par_option[st.session_state.get(f"hab_{agent['nom']}_{j}", "Indifférent")]
+                    if v:
+                        hab[nom_j] = v
+                agent["habitudes"] = hab
+            with open(FICHIERS["personnel"], "w", encoding="utf-8") as f:
+                json.dump(st.session_state.personnel, f, ensure_ascii=False, indent=1)
+            st.success("Habitudes enregistrées dans data/personnel.json.")
+            st.rerun()
+    with c4:
+        if st.button("↺ Recharger depuis le fichier"):
+            st.session_state.personnel, st.session_state.effectifs_min = charger()
+            st.rerun()
+
     if st.button("⚙️ Calculer le planning", type="primary"):
         with st.spinner("Résolution du modèle CP-SAT..."):
             try:

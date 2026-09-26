@@ -1,4 +1,4 @@
-"""Paramètres métier du planning — à adapter au CHR Haute Senne Soignies.
+"""Paramètres métier du planning (service des urgences, anonymisé — RGPD).
 
 TOUS les horaires / codes / effectifs vivent ici. Le solveur (solveur.py)
 et l'app Streamlit (app.py) ne contiennent aucune valeur métier en dur.

@@ -6,7 +6,12 @@
   "temps_du_mois_h": 167.2,
   "solde_reporte_h": 31.2,
   "affectations_fixes": [],
-  "desiderata_brutes": "Congé validé le 06/10. Pas de nuit le week-end du 17-18/10 (anniversaire de la famille)."
+  "desiderata_brutes": "Congé validé le 06/10. Pas de nuit le week-end du 17-18/10 (anniversaire de la famille).",
+  "habitudes": {
+   "lun": "M",
+   "mar": "M",
+   "mer": "M"
+  }
  },
  {
   "nom": "V.L.",
@@ -15,7 +20,11 @@
   "temps_du_mois_h": 167.2,
   "solde_reporte_h": 0.0,
   "affectations_fixes": [],
-  "desiderata_brutes": "Je préférerais faire les matins du 12 au 14/10. Pas dispo le 22/10, RDV médical."
+  "desiderata_brutes": "Je préférerais faire les matins du 12 au 14/10. Pas dispo le 22/10, RDV médical.",
+  "habitudes": {
+   "jeu": "N",
+   "ven": "N"
+  }
  },
  {
   "nom": "N.M.",
@@ -24,7 +33,10 @@
   "temps_du_mois_h": 167.2,
   "solde_reporte_h": 12.5,
   "affectations_fixes": [],
-  "desiderata_brutes": "Formation obligatoire SIAU le 08/10, toute la journée. Je voudrais éviter les nuits après le 20/10 (retour d'un enfant à la maison)."
+  "desiderata_brutes": "Formation obligatoire SIAU le 08/10, toute la journée. Je voudrais éviter les nuits après le 20/10 (retour d'un enfant à la maison).",
+  "habitudes": {
+   "sam": "S"
+  }
  },
  {
   "nom": "S.T.",
@@ -38,7 +50,8 @@
     "code": "IC"
    }
   ],
-  "desiderata_brutes": "Aucun souhait particulier, je couvre les trous."
+  "desiderata_brutes": "Aucun souhait particulier, je couvre les trous.",
+  "habitudes": {}
  },
  {
   "nom": "D.E.",
@@ -47,7 +60,8 @@
   "temps_du_mois_h": 167.2,
   "solde_reporte_h": 22.0,
   "affectations_fixes": [],
-  "desiderata_brutes": "Pas de nuit du 03/10 au 05/10, garde d'enfant malade. J'aimerais faire les soirs du 15/10 au 16/10."
+  "desiderata_brutes": "Pas de nuit du 03/10 au 05/10, garde d'enfant malade. J'aimerais faire les soirs du 15/10 au 16/10.",
+  "habitudes": {}
  },
  {
   "nom": "W.S.",
@@ -56,7 +70,8 @@
   "temps_du_mois_h": 167.2,
   "solde_reporte_h": 5.0,
   "affectations_fixes": [],
-  "desiderata_brutes": "Congé posé du 10/10 au 12/10. Je préfère les matins en général."
+  "desiderata_brutes": "Congé posé du 10/10 au 12/10. Je préfère les matins en général.",
+  "habitudes": {}
  },
  {
   "nom": "K.N.",
@@ -65,7 +80,8 @@
   "temps_du_mois_h": 167.2,
   "solde_reporte_h": 0.0,
   "affectations_fixes": [],
-  "desiderata_brutes": "Pas dispo le 24/10 (rendez-vous administratif). Rien d'autre."
+  "desiderata_brutes": "Pas dispo le 24/10 (rendez-vous administratif). Rien d'autre.",
+  "habitudes": {}
  },
  {
   "nom": "B.M.",
@@ -74,7 +90,8 @@
   "temps_du_mois_h": 167.2,
   "solde_reporte_h": 18.0,
   "affectations_fixes": [],
-  "desiderata_brutes": "Nuit souhaitée le 25/10 (échange déjà convenu avec un collègue). Sinon indifférent."
+  "desiderata_brutes": "Nuit souhaitée le 25/10 (échange déjà convenu avec un collègue). Sinon indifférent.",
+  "habitudes": {}
  },
  {
   "nom": "G.A.",
@@ -83,7 +100,10 @@
   "temps_du_mois_h": 167.2,
   "solde_reporte_h": 0.0,
   "affectations_fixes": [],
-  "desiderata_brutes": "RDV dentiste le 09/10 matin, pas dispo ce matin-là. Je voudrais travailler le 11/10."
+  "desiderata_brutes": "RDV dentiste le 09/10 matin, pas dispo ce matin-là. Je voudrais travailler le 11/10.",
+  "habitudes": {
+   "dim": "M"
+  }
  },
  {
   "nom": "L.P.",
@@ -92,7 +112,8 @@
   "temps_du_mois_h": 167.2,
   "solde_reporte_h": 7.5,
   "affectations_fixes": [],
-  "desiderata_brutes": "Pas de weekend le 3-4/10 (mariage), week-ends des 17-18 et 24-25 sans problème."
+  "desiderata_brutes": "Pas de weekend le 3-4/10 (mariage), week-ends des 17-18 et 24-25 sans problème.",
+  "habitudes": {}
  },
  {
   "nom": "M.J.",
@@ -101,7 +122,8 @@
   "temps_du_mois_h": 167.2,
   "solde_reporte_h": 0.0,
   "affectations_fixes": [],
-  "desiderata_brutes": "Congé validé le 21/10. Je préfère les soirs quand c'est possible."
+  "desiderata_brutes": "Congé validé le 21/10. Je préfère les soirs quand c'est possible.",
+  "habitudes": {}
  },
  {
   "nom": "V.G.",
@@ -110,6 +132,10 @@
   "temps_du_mois_h": 167.2,
   "solde_reporte_h": 9.0,
   "affectations_fixes": [],
-  "desiderata_brutes": "Pas de nuit, et pas dispo le 13/10 (examen du permis)."
+  "desiderata_brutes": "Pas de nuit, et pas dispo le 13/10 (examen du permis).",
+  "habitudes": {
+   "lun": "S",
+   "ven": "S"
+  }
  }
 ]

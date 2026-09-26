@@ -1,4 +1,4 @@
-# Planning Urgences — CHR Haute Senne Soignies
+# Planning du service des urgences
 
 Architecture en 3 briques, un seul processus Python :
 
@@ -11,9 +11,15 @@ Architecture en 3 briques, un seul processus Python :
 **Le LLM ne génère jamais la grille** — il structure les desiderata en amont et explique
 le résultat en aval. Une hallucination du modèle ne peut pas corrompre une affectation.
 
-**Anonymisation** — les agents sont désignés UNIQUEMENT par leurs initiales (ex: « P.K. »)
-dans les données, les prompts LLM, la grille et les exports. Aucun nom complet n'est
-stocké ni reproduit (les prompts l'interdisent explicitement au modèle).
+**Anonymisation / RGPD** —
+- les agents sont désignés UNIQUEMENT par leurs initiales (ex: « P.K. ») dans les données,
+  les prompts LLM, la grille et les exports ; aucun nom complet n'est stocké ni reproduit
+  (les prompts l'interdisent explicitement au modèle) ;
+- aucun nom d'établissement dans le code, les exports ou les fichiers ;
+- LLM 100% local (LM Studio) — aucune donnée envoyée à un service externe ;
+- les `desiderata_brutes` contiennent des motifs libres (ex: « RDV médical ») : ne pas y
+  écrire de données de santé détaillées ; les exports sont partagés uniquement avec le
+  service de planification concerné (finalité exclusive).
 
 ## Fichiers
 
@@ -50,8 +56,10 @@ OpenAI) avec le modèle chargé. Nom du modèle configurable via la variable d'e
 - **D6** — Repos hebdomadaire ≈ max 5 jours travaillés / fenêtre glissante de 7 jours
 
 Contraintes souples (objectives pondérées, cf. `config.POIDS`) : respect des heures dues,
-souhait_negatif (minimiser), souhait_positif (maximiser), équité des nuits et des
-week-ends au sein de chaque rôle.
+souhait_negatif (minimiser), souhait_positif (maximiser), **S4 — habitudes horaires**
+(bonus si l'agent tient son poste habituel le jour concerné ; saisie dans `data/personnel.json`,
+champ `habitudes`, ou dans l'onglet 2 de l'app), équité des nuits et des week-ends
+au sein de chaque rôle.
 
 ## ⚠️ À VALIDER AVANT MISE EN PRODUCTION
 

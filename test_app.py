@@ -11,7 +11,7 @@ from streamlit.testing.v1 import AppTest
 at = AppTest.from_file("app.py", default_timeout=120)
 at.run()
 assert not at.exception, f"Exceptions : {at.exception}"
-assert at.title[0].value == "Planning Urgences — CHR Haute Senne Soignies"
+assert at.title[0].value == "Planning — Service des urgences"
 assert [t.label for t in at.tabs] or len(at.tabs) == 3
 print("Tabs:", [t.label for t in at.tabs])
 # Onglet 2 : vérifier le bouton de calcul
