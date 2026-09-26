@@ -32,22 +32,27 @@ def jours_du_mois(mois: str) -> list[date]:
     return [date(an, m, d) for d in range(1, nb + 1)]
 
 
-def _duree(code: str) -> int:
-    return config.POSTES[code]["duree_h"]
+JOUR_MIN = 1440  # minutes dans une journée
+TRANCHE_NUIT = (21 * 60, 30 * 60)  # 21h→6h, en minutes
 
 
-def _tranche_nuit(code: str) -> float:
-    """Part du poste qui tombe dans la tranche légale 21h-6h."""
-    p = config.POSTES[code]
-    s, f = p["start_h"], p["start_h"] + p["duree_h"]
-    a, b = max(s, 21), min(f, 30)
-    return max(0.0, b - a)
+def _duree(code: str, jour) -> int:
+    """Durée du poste en minutes (entier, compatible CP-SAT). Dépend du jour pour N."""
+    s, e = config.horaires_poste(code, jour)
+    return e - s
 
 
-def _repos_entre(c1: str, c2: str) -> float:
-    """Heures de repos entre la fin du poste c1 (jour d) et le début de c2 (jour d+1)."""
-    fin_d = config.POSTES[c1]["start_h"] + config.POSTES[c1]["duree_h"]
-    deb_d1 = 24 + config.POSTES[c2]["start_h"]
+def _tranche_nuit(code: str, jour) -> int:
+    """Part du poste qui tombe dans la tranche légale 21h-6h (minutes)."""
+    s, f = config.horaires_poste(code, jour)
+    a, b = max(s, TRANCHE_NUIT[0]), min(f, TRANCHE_NUIT[1])
+    return max(0, b - a)
+
+
+def _repos_entre(c1: str, jour_d, c2: str, jour_d1) -> int:
+    """Minutes de repos entre la fin du poste c1 (jour d) et le début de c2 (jour d+1)."""
+    fin_d = config.horaires_poste(c1, jour_d)[1]
+    deb_d1 = JOUR_MIN + config.horaires_poste(c2, jour_d1)[0]
     return deb_d1 - fin_d
 
 
@@ -60,7 +65,7 @@ def _normaliser_poste(poste) -> str | None:
     return {"matin": "M", "soir": "S", "nuit": "N", "12h": "12"}.get(poste.lower())
 
 
-def _valider_config(effectifs_min: dict, personnel: list) -> None:
+def _valider_config(effectifs_min: dict, personnel: list, jours: list[date]) -> None:
     roles_connus = {p.get("role") for p in personnel}
     for role, postes in effectifs_min.items():
         if role not in config.ROLES:
@@ -71,14 +76,21 @@ def _valider_config(effectifs_min: dict, personnel: list) -> None:
     for p in personnel:
         if p.get("role") not in config.ROLES:
             raise ErreurConfig(f"Rôle inconnu pour '{p.get('nom')}' : '{p.get('role')}'")
-    for code, meta in config.POSTES.items():
-        if _tranche_nuit(code) > config.NIGHT_HOURS_MAX and code not in config.POSTES_EXEMPTS_NUIT:
-            raise ErreurConfig(
-                f"Poste '{code}' : {meta['start_h']}h + {meta['duree_h']}h inclut "
-                f"{_tranche_nuit(code):.0f}h entre 21h et 6h (> {config.NIGHT_HOURS_MAX}h, loi 17/02/1997). "
-                f"Soit ajuster les horaires dans config.POSTES, soit l'ajouter à config.POSTES_EXEMPTS_NUIT "
-                f"si la CCT/règlement de travail le permet."
-            )
+    for code in config.POSTES:
+        if code in config.POSTES_EXEMPTS_NUIT:
+            continue
+        # Vérifier chaque jour du mois : certains postes (ex: nuits de jours fériés)
+        # ont des horaires qui varient d'un jour à l'autre.
+        for j in jours:
+            s, f = config.horaires_poste(code, j)
+            tranche = max(0, min(f, TRANCHE_NUIT[1]) - max(s, TRANCHE_NUIT[0]))
+            if tranche > config.NIGHT_HOURS_MAX:
+                raise ErreurConfig(
+                    f"Poste '{code}' le {j.isoformat()} : inclut {tranche // 60}h entre 21h et 6h "
+                    f"(> {config.NIGHT_HOURS_MAX // 60}h, loi 17/02/1997). "
+                    f"Soit ajuster les horaires dans config.POSTES, soit l'ajouter à config.POSTES_EXEMPTS_NUIT "
+                    f"si la CCT/règlement de travail le permet."
+                )
     # Prévenir (sans bloquer) si un effectif minimum n'a aucun agent pour l'assurer.
     for role, postes in effectifs_min.items():
         n_agents = sum(1 for p in personnel if p.get("role") == role)
@@ -95,8 +107,8 @@ def resoudre(mois: str,
              desiderata: dict | None = None,
              time_limit_s: int = config.TIME_LIMIT_S) -> dict:
     """Résout le modèle. Retourne statut/grille/heures/stats/warnings. Ne lève pas en cas d'INFISAT."""
-    _valider_config(effectifs_min, personnel)
     jours = jours_du_mois(mois)
+    _valider_config(effectifs_min, personnel, jours)
     nb = len(jours)
     codes = list(config.POSTES)
     P = list(range(len(personnel)))
@@ -172,7 +184,7 @@ def resoudre(mois: str,
         for d in range(nb - 1):
             for c1 in codes:
                 for c2 in codes:
-                    if _repos_entre(c1, c2) < config.REPOS_QUOTIDIEN_H:
+                    if _repos_entre(c1, jours[d], c2, jours[d + 1]) < config.REPOS_QUOTIDIEN_H:
                         model.Add(x[p, d, c1] + x[p, d + 1, c2] <= 1)
 
     # ── D6 : repos hebdomadaire (approx. 5 jours travaillés / 7) ────────
@@ -181,15 +193,15 @@ def resoudre(mois: str,
         for d in range(nb - w + 1):
             model.Add(sum(t[p, d + i] for i in range(w)) <= config.SEMAINE_MAX_JOURS_TRAVAILLES)
 
-    # ── S1 : respect des heures dues ────────────────────────────────────
-    heures = {(p): sum(x[p, d, c] * _duree(c) for d in range(nb) for c in codes) for p in P}
+    # ── S1 : respect des heures dues (en minutes) ─────────────────────────
+    heures_min = {p: sum(x[p, d, c] * _duree(c, jours[d]) for d in range(nb) for c in codes) for p in P}
     ecarts = []
     for p in P:
         cible = (personnel[p].get("temps_du_mois_h", 0) * personnel[p].get("taux_occupation", 100) / 100.0)
-        cible_i = int(round(cible))
-        e = model.NewIntVar(0, 9999, f"ecart[{personnel[p]['nom']}]")
-        model.Add(e >= heures[p] - cible_i)
-        model.Add(e >= cible_i - heures[p])
+        cible_i = int(round(cible * 60))
+        e = model.NewIntVar(0, 999999, f"ecart[{personnel[p]['nom']}]")
+        model.Add(e >= heures_min[p] - cible_i)
+        model.Add(e >= cible_i - heures_min[p])
         ecarts.append(e)
 
     # ── S2 : souhait_negatif → minimiser les jours/postes concernés ────
@@ -254,10 +266,11 @@ def resoudre(mois: str,
     grille, heures_par_p, stats = {}, {}, {}
     for p in P:
         nom = personnel[p]["nom"]
-        heures_par_p[nom] = sum(
-            (1 if solver.Value(x[p, d, c]) else 0) * _duree(c) for d in range(nb) for c in codes)
+        heures_min_p = sum(
+            (1 if solver.Value(x[p, d, c]) else 0) * _duree(c, jours[d]) for d in range(nb) for c in codes)
+        heures_par_p[nom] = heures_min_p
         stats[nom] = {
-            "heures": heures_par_p[nom],
+            "heures": round(heures_min_p / 60, 2),
             "cible": personnel[p].get("temps_du_mois_h", 0) * personnel[p].get("taux_occupation", 100) / 100.0,
             "nuits": sum(1 for d in range(nb) if solver.Value(x[p, d, "N"])),
             "jours_weekend": sum(1 for d in range(nb) if jours[d].weekday() >= 5 and solver.Value(t[p, d])),

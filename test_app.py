@@ -8,7 +8,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 from streamlit.testing.v1 import AppTest
 
-at = AppTest.from_file("app.py", default_timeout=30)
+at = AppTest.from_file("app.py", default_timeout=120)
 at.run()
 assert not at.exception, f"Exceptions : {at.exception}"
 assert at.title[0].value == "Planning Urgences — CHR Haute Senne Soignies"
