@@ -1,6 +1,7 @@
 {
-  "siamu":         {"M": 1, "N": 1},
-  "infirmier":     {"M": 2},
-  "aide_soignant": {"M": 1},
-  "logistique":    {"S": 1}
+  "_groupes_roles": {"infirmier_tous": ["siamu", "infirmier"]},
+  "_groupes_postes": {"jour": ["M", "S", "12"], "nuit": ["N"]},
+
+  "infirmier_tous": {"jour": 5, "nuit": 3},
+  "logistique": {"nuit": 1}
 }

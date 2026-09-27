@@ -6,12 +6,32 @@ Température basse (0.1) : fiabilité structurelle > créativité.
 from __future__ import annotations
 
 import json
-import os
+from urllib.parse import urlsplit
 
 import requests
 
-LMSTUDIO_URL = os.environ.get("LMSTUDIO_URL", "http://localhost:1234/v1/chat/completions")
-MODELE = os.environ.get("LMSTUDIO_MODELE", "qwen3.8-27b")  # nom exact du modèle chargé dans LM Studio
+import app_secrets as _cfg
+
+LMSTUDIO_URL = _cfg.secret("LMSTUDIO_URL", "http://localhost:1234/v1/chat/completions")
+MODELE = _cfg.secret("LMSTUDIO_MODELE", "qwen3.8-27b")  # nom exact du modèle chargé
+
+
+def _timeout_s() -> int:
+    """Timeout HTTP (secondes). Un 27B local peut mettre des minutes sur un JSON long."""
+    try:
+        return int(_cfg.secret("LMSTUDIO_TIMEOUT_S", "600"))
+    except ValueError:
+        return 600
+
+
+def _origine(url: str) -> str:
+    """Origine (schéma+host) seulement — jamais le chemin complet dans un message d'erreur."""
+    p = urlsplit(url)
+    return f"{p.scheme}://{p.netloc}" if p.netloc else "endpoint inconnu"
+
+
+def endpoint_est_local() -> bool:
+    return urlsplit(LMSTUDIO_URL).netloc.split(":")[0] in ("localhost", "127.0.0.1", "::1")
 
 
 class ErreurLLM(Exception):
@@ -123,13 +143,22 @@ def _appeler(system_prompt: str, contexte: dict, max_tokens: int = 2000) -> dict
                 ],
                 "temperature": 0.1,
                 "max_tokens": max_tokens,
+                # Modèles à réflexion (Qwen3) : sans cette option, tout le budget de
+                # tokens part en « thinking » et `content` revient vide. Ignorée par
+                # les modèles non concernés.
+                "chat_template_kwargs": {"enable_thinking": False},
             },
-            timeout=180,
+            timeout=_timeout_s(),
         )
         r.raise_for_status()
-        return _extraire_json(r.json()["choices"][0]["message"]["content"])
+        msg = r.json()["choices"][0]["message"]
+        texte = (msg.get("content") or "").strip()
+        if not texte:
+            # Filet de sécurité si le modèle a tout mis dans la réflexion.
+            texte = (msg.get("reasoning_content") or "").strip()
+        return _extraire_json(texte)
     except requests.RequestException as e:
-        raise ErreurLLM(f"LM Studio injoignable sur {LMSTUDIO_URL} : {e}") from e
+        raise ErreurLLM(f"LLM injoignable ({_origine(LMSTUDIO_URL)}) : {e}") from e
     except (KeyError, json.JSONDecodeError) as e:
         raise ErreurLLM(f"Réponse du modèle invalide : {e}") from e
 

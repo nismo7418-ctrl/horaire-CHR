@@ -1,0 +1,16 @@
+# Configuration Streamlit (v1.56) durcie pour le déploiement cloud.
+# HTTPS est assuré par le reverse proxy devant l'app (Caddy/nginx).
+
+[server]
+headless = true
+# NB : enableCORS=false est incompatible avec enableXsrfProtection=true (Streamlit
+# écraserait alors enableCORS en true). On conserve la protection CSRF (plus sûre)
+# ; l'app reste en même origine via le reverse proxy devant elle.
+enableXsrfProtection = true
+maxUploadSize = 2                # Mo — l'app ne télécharge pas de fichiers, garde-fou
+
+[browser]
+gatherUsageStats = false         # aucune télémétrie envoyée à Streamlit
+
+[client]
+showErrorDetails = "short"       # détails d'erreur limités (pas de fuites d'implémentation)

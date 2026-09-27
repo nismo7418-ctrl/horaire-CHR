@@ -137,5 +137,52 @@
    "lun": "S",
    "ven": "S"
   }
+ },
+ {
+  "nom": "C.R.",
+  "role": "siamu",
+  "taux_occupation": 100,
+  "temps_du_mois_h": 167.2,
+  "solde_reporte_h": 0.0,
+  "affectations_fixes": [],
+  "desiderata_brutes": "Je préfère les matins en semaine.",
+  "habitudes": {
+   "lun": "M",
+   "mar": "M"
+  }
+ },
+ {
+  "nom": "H.B.",
+  "role": "siamu",
+  "taux_occupation": 90,
+  "temps_du_mois_h": 167.2,
+  "solde_reporte_h": -2.0,
+  "affectations_fixes": [],
+  "desiderata_brutes": "Aucun souhait particulier.",
+  "habitudes": {}
+ },
+ {
+  "nom": "J.D.",
+  "role": "infirmier",
+  "taux_occupation": 100,
+  "temps_du_mois_h": 167.2,
+  "solde_reporte_h": 0.0,
+  "affectations_fixes": [],
+  "desiderata_brutes": "Pas de nuit le 25/10 (rentrée d'un proche). Sinon indifférent.",
+  "habitudes": {
+   "sam": "N"
+  }
+ },
+ {
+  "nom": "T.L.",
+  "role": "infirmier",
+  "taux_occupation": 80,
+  "temps_du_mois_h": 167.2,
+  "solde_reporte_h": 3.0,
+  "affectations_fixes": [],
+  "desiderata_brutes": "Je voudrais éviter les dimanches.",
+  "habitudes": {
+   "mer": "S"
+  }
  }
 ]

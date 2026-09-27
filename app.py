@@ -12,12 +12,31 @@ import json
 import pandas as pd
 import streamlit as st
 
+import auth
 import config
 import exporter
 import llm
 import solveur
 
 st.set_page_config(page_title="Planning Urgences", layout="wide", page_icon="🏥")
+
+# ── Authentification (déploiement cloud) ───────────────────────────────
+if not auth.veillee():
+    st.title("Planning Urgences — Connexion")
+    st.caption("Accès réservé au responsable de la planification. Les données ne vivent "
+               "qu'en mémoire de session et sont effacées à la déconnexion — rien n'est stocké.")
+    with st.form("connexion", clear_on_submit=True):
+        u = st.text_input("Identifiant")
+        p = st.text_input("Mot de passe", type="password")
+        submit = st.form_submit_button("Se connecter", type="primary")
+    if submit:
+        ok, msg = auth.connecter(u or "", p or "")
+        if ok:
+            auth.ouvrir_session(u)
+            st.rerun()
+        else:
+            st.error(msg or "Identifiants invalides.")
+    st.stop()
 
 FICHIERS = {"personnel": "data/personnel.json", "effectifs_min": "data/effectifs_min.json"}
 
@@ -39,8 +58,8 @@ if "personnel" not in st.session_state:
 
 st.title("Planning — Service des urgences")
 
-st.caption("Projet conforme RGPD : anonymisé par initiales, aucun nom d'établissement, "
-           "aucune donnée nominative stockée. LLM 100% local.")
+st.caption("Conforme RGPD : anonymisé par initiales, aucun nom d'établissement, "
+           "aucune donnée nominative stockée. LLM en instance privée (aucune transmission tierce).")
 
 with st.sidebar:
     st.header("Paramètres")
@@ -54,6 +73,33 @@ with st.sidebar:
         st.session_state.planning = None
         st.session_state.explication = None
         st.rerun()
+
+    if llm.endpoint_est_local():
+        st.caption("⚠️ Endpoint LLM en `localhost` — pour le déploiement cloud, pointer "
+                   "`LMSTUDIO_URL` vers l'hôte de modèle dédié (réseau privé, HTTPS).")
+
+    st.markdown("---")
+    st.caption(f"👤 Connecté : **{st.session_state.auth['user']}** (session {auth.SESSION_TIMEOUT_S // 60} min)")
+    if st.button("⏻ Se déconnecter"):
+        auth.deconnecter()
+        st.rerun()
+
+    with st.expander("🔒 Confidentialité & RGPD"):
+        st.markdown(
+            "- **Données** : initiales des agents uniquement — aucun nom complet, aucun nom "
+            "d'établissement, aucune donnée de santé détaillée (motifs courts et factuels).\n"
+            "- **Stockage** : aucune base de données. Les données vivent en mémoire de session "
+            "seulement et sont **effacées à la déconnexion** ; `data/*.json` ne contient que des "
+            "initiales et des volumes horaires.\n"
+            "- **LLM** : instance privée (LM Studio) sur infrastructure dédiée — aucune "
+            "transmission vers un service tiers. Avant d'utiliser un endpoint externe, "
+            "informer le DPO / responsable de la protection des données.\n"
+            "- **Durée de conservation** : le planning est un document de travail — ne le "
+            "diffuser qu'au service de planification (finalité exclusive).\n"
+            "- **Droits des personnes** : accès, rectification, effacement à exercer auprès du "
+            "responsable de la planification (DPO de l'établissement).\n"
+            "- **Décision** : le planning généré est une proposition technique — la décision "
+            "d'affectation relève du service.")
 
 noms = [p["nom"] for p in st.session_state.personnel]
 tab1, tab2, tab3 = st.tabs(["1 · Désiderata", "2 · Génération", "3 · Résultats & export"])
@@ -106,6 +152,9 @@ with tab1:
             f_prio = st.selectbox("Priorité", ["haute", "moyenne", "basse"])
             f_motif = st.text_input("Motif (court, factuel)")
             if st.form_submit_button("Ajouter la ligne"):
+                if f_date is None:
+                    st.warning("Choisir une date avant d'ajouter la ligne.")
+                    st.stop()
                 bloc = st.session_state.desiderata.setdefault(
                     nom, {"structurees": [], "a_clarifier": [], "conflits_detectes": []})
                 bloc["structurees"].append({

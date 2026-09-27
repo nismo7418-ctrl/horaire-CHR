@@ -67,12 +67,22 @@ def _normaliser_poste(poste) -> str | None:
 
 def _valider_config(effectifs_min: dict, personnel: list, jours: list[date]) -> None:
     roles_connus = {p.get("role") for p in personnel}
-    for role, postes in effectifs_min.items():
-        if role not in config.ROLES:
-            raise ErreurConfig(f"Rôle inconnu dans effectifs_min : '{role}' (attendu : {config.ROLES})")
-        for code in postes:
-            if code not in config.POSTES:
-                raise ErreurConfig(f"Code poste inconnu '{code}' pour le rôle '{role}' (attendu : {list(config.POSTES)})")
+    groupes_roles = effectifs_min.get("_groupes_roles", {})
+    groupes_postes = effectifs_min.get("_groupes_postes", {})
+    for cle, postes in effectifs_min.items():
+        if cle.startswith("_groupes"):
+            continue
+        roles_cle = groupes_roles.get(cle, [cle])
+        for r in roles_cle:
+            if r not in config.ROLES:
+                raise ErreurConfig(f"Rôle inconnu dans effectifs_min : '{r}' (groupe '{cle}', attendu : {config.ROLES})")
+        for cle_poste in postes:
+            codes_poste = groupes_postes.get(cle_poste, [cle_poste])
+            for code in codes_poste:
+                if code not in config.POSTES:
+                    raise ErreurConfig(
+                        f"Code poste inconnu '{code}' (groupe '{cle_poste}') pour '{cle}' "
+                        f"(attendu : {list(config.POSTES)})")
     for p in personnel:
         if p.get("role") not in config.ROLES:
             raise ErreurConfig(f"Rôle inconnu pour '{p.get('nom')}' : '{p.get('role')}'")
@@ -92,11 +102,15 @@ def _valider_config(effectifs_min: dict, personnel: list, jours: list[date]) -> 
                     f"si la CCT/règlement de travail le permet."
                 )
     # Prévenir (sans bloquer) si un effectif minimum n'a aucun agent pour l'assurer.
-    for role, postes in effectifs_min.items():
-        n_agents = sum(1 for p in personnel if p.get("role") == role)
-        for code, n in postes.items():
+    groupes_roles = effectifs_min.get("_groupes_roles", {})
+    for cle, postes in effectifs_min.items():
+        if cle.startswith("_groupes"):
+            continue
+        roles_cle = groupes_roles.get(cle, [cle])
+        n_agents = sum(1 for p in personnel if p.get("role") in roles_cle)
+        for cle_poste, n in postes.items():
             if n > 0 and n_agents == 0:
-                print(f"[AVERT] {role}/{code} : effectif min {n} mais aucun agent de ce rôle dans la liste.")
+                print(f"[AVERT] {cle} : effectif min {n} mais aucun agent des rôles {roles_cle} dans la liste.")
 
 
 # ── Résolution ──────────────────────────────────────────────────────────
@@ -171,13 +185,19 @@ def resoudre(mois: str,
                 for c in codes:
                     model.Add(x[pi, d, c] == (1 if c == poste else 0))
 
-    # ── D4 : effectifs minimums par rôle/poste/jour ─────────────────────
-    for role, postes in effectifs_min.items():
-        groupe = [i for i in P if personnel[i].get("role") == role]
+    # ── D4 : effectifs minimums par groupe de rôles / groupe de postes / jour ──
+    groupes_roles = effectifs_min.get("_groupes_roles", {})
+    groupes_postes = effectifs_min.get("_groupes_postes", {})
+    for cle, postes in effectifs_min.items():
+        if cle.startswith("_groupes"):
+            continue
+        roles_cle = groupes_roles.get(cle, [cle])
+        groupe = [i for i in P if personnel[i].get("role") in roles_cle]
         for d in range(nb):
-            for code, n in postes.items():
+            for cle_poste, n in postes.items():
+                codes_poste = groupes_postes.get(cle_poste, [cle_poste])
                 if n and groupe:
-                    model.Add(sum(x[i, d, code] for i in groupe) >= n)
+                    model.Add(sum(x[i, d, c] for i in groupe for c in codes_poste) >= n)
 
     # ── D5 : repos quotidien 11h (matrice de compatibilité précalculée) ──
     for p in P:
@@ -255,21 +275,23 @@ def resoudre(mois: str,
         groupe = [i for i in P if personnel[i].get("role") == role]
         nuits = {i: sum(x[i, d, c] for d in range(nb) for c in codes if c == "N") for i in groupe}
         wknds = {i: sum(t[i, d] for d in range(nb) if jours[d].weekday() >= 5) for i in groupe}
+        max_n = model.NewIntVar(0, nb, f"maxnuit[{role}]")
+        max_w = model.NewIntVar(0, nb, f"maxwknd[{role}]")
         for i in groupe:
-            m_n = model.NewIntVar(0, nb, f"maxnuit[{role}|{personnel[i]['nom']}]")
-            model.Add(m_n >= nuits[i])
-            equite_terms.append(m_n)
-            m_w = model.NewIntVar(0, nb, f"maxwknd[{role}|{personnel[i]['nom']}]")
-            model.Add(m_w >= wknds[i])
-            equite_terms.append(m_w)
+            model.Add(max_n >= nuits[i])
+            model.Add(max_w >= wknds[i])
+        equite_terms += [max_n, max_w]
 
     # ── Objectif ─────────────────────────────────────────────────────────
+    # equite_terms = [max_n_role1, max_w_role1, max_n_role2, max_w_role2, ...]
+    equite_nuits_terms = equite_terms[0::2]
+    equite_wknd_terms = equite_terms[1::2]
     model.Minimize(
         config.POIDS["heures"] * sum(ecarts)
         + sum(neg_terms)
         - sum(pos_terms)
-        + config.POIDS["equite_nuits"] * sum(equite_terms[0::2])
-        + config.POIDS["equite_weekends"] * sum(equite_terms[1::2])
+        + config.POIDS["equite_nuits"] * sum(equite_nuits_terms)
+        + config.POIDS["equite_weekends"] * sum(equite_wknd_terms)
     )
 
     solver = cp_model.CpSolver()
