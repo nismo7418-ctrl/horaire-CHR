@@ -86,7 +86,19 @@ if result["statut"] in ("OPTIMAL", "FEASIBLE"):
     grille = result["grille"]
     assert grille["2026-10-06"].get("P.K.", "x") == "", "congé 06/10 non respecté"
     assert grille["2026-10-08"].get("N.M.", "x") == "", "formation 08/10 non respectée"
-    assert grille["2026-10-04"].get("S.T.", "x") == "", "affectation fixe 04/10 absente"
+    assert grille["2026-10-04"].get("S.T.", "x") == "12", "affectation fixe 12h 04/10 non respectée"
+    # D4 : IC couverte (min 1) un jour ouvré
+    assert any(poste == "IC" for poste in grille["2026-10-05"].values()), "IC non couverte le lundi 05/10"
+    # D7 : seuls les rôles autorisés tiennent le poste IC
+    roles = {p["nom"]: p["role"] for p in personnel}
+    for jour, lignes in grille.items():
+        for nom, poste in lignes.items():
+            if poste == "IC":
+                aut = config.POSTES_AUTORISES_PAR_ROLE.get(roles[nom])
+                assert aut is None or "IC" in aut, f"D7 violée : {nom} ({roles[nom]}) sur IC le {jour}"
+    # S5 : soldes fin de mois affichés
+    for nom, s in result["stats"].items():
+        print(f"  solde  {nom:22s} fin de mois {s['solde_fin_de_mois_h']:+7.2f} h")
     print("\nVérifications ponctuelles : OK")
 else:
     print(result.get("info_solveur"))

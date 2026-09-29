@@ -1,0 +1,71 @@
+{
+  "mois": "2024-10",
+  "titre_grille": "Urgences - octobre 2024",
+  "source": "photo IMG_6240 (imprimé POLYPOINT / PEP)",
+  "transcription": {
+    "methode": "lecture visuelle (LLM) de la photo en haute résolution",
+    "fiabilite": {
+      "roster_t_act_soldes": "bonne",
+      "effectifs_par_jour": "moyenne (ligne Total imprimée)",
+      "repartition_postes_par_jour": "moyenne (bloc Effectif imprimée)",
+      "affectations_par_agent": "NON transcrite — passe de précision prévue (bandes de lignes), fiabilité trop faible en vue complète"
+    },
+    "conventions": "null = case vide/repos ; dp = dispense de prestation ; E = maladie prolongée ; C = congé sans solde (CSS) ; palm = congé/vacances ; '12' = poste 12h"
+  },
+  "calendrier": "2024-10, 31 jours, 1er = mardi (31e = jeudi)",
+  "roster": [
+    { "initiales": "W.I.",  "t_act_pct": 100,  "solde_hhmm": "31:10",  "note": "infirmière en chef — garde d'IC quasi tous les jours ouvrés, absente le WE" },
+    { "initiales": "W.B.",  "t_act_pct": 80,   "solde_hhmm": "16:38" },
+    { "initiales": "M.P.",  "t_act_pct": 50,   "solde_hhmm": "32:10" },
+    { "initiales": "B.J.",  "t_act_pct": 50,   "solde_hhmm": "25:26" },
+    { "initiales": "R.F.",  "t_act_pct": 75,   "solde_hhmm": "17:00",  "note": "ligne quasi entière en ❓/E (maladie prolongée)" },
+    { "initiales": "G.I.",  "t_act_pct": 80,   "solde_hhmm": "23:54" },
+    { "initiales": "G.S.",  "t_act_pct": 100,  "solde_hhmm": "54:32" },
+    { "initiales": "C.B.",  "t_act_pct": 100,  "solde_hhmm": "26:34" },
+    { "initiales": "D.F.",  "t_act_pct": 100,  "solde_hhmm": "16:56" },
+    { "initiales": "D.GEO.", "t_act_pct": 100, "solde_hhmm": "11:00" },
+    { "initiales": "B.I.",  "t_act_pct": 50,   "solde_hhmm": "28:11",  "note": "lignes palm/🌴 nombreuses (congés)" },
+    { "initiales": "L.A.",  "t_act_pct": 100,  "solde_hhmm": "13:30" },
+    { "initiales": "L.S.",  "t_act_pct": 80,   "solde_hhmm": "12:20" },
+    { "initiales": "D.A.",  "t_act_pct": 80,   "solde_hhmm": "6:51" },
+    { "initiales": "H.A.",  "t_act_pct": 80,   "solde_hhmm": "6:44" },
+    { "initiales": "G.M.",  "t_act_pct": 80,   "solde_hhmm": "10:19" },
+    { "initiales": "D.M.",  "t_act_pct": 80,   "solde_hhmm": "24:52" },
+    { "initiales": "V.M.",  "t_act_pct": 100,  "solde_hhmm": "26:56" },
+    { "initiales": "L.J.",  "t_act_pct": 100,  "solde_hhmm": "25:17" },
+    { "initiales": "I.I.",  "t_act_pct": 100,  "solde_hhmm": "11:33" },
+    { "initiales": "V.E.",  "t_act_pct": 80,   "solde_hhmm": "44:54" },
+    { "initiales": "P.A.",  "t_act_pct": 100,  "solde_hhmm": "21:50" },
+    { "initiales": "A.K.",  "t_act_pct": 100,  "solde_hhmm": "19:14" },
+    { "initiales": "B.L.",  "t_act_pct": 33.33, "solde_hhmm": "32:56" },
+    { "initiales": "M.M.",  "t_act_pct": 84.2, "solde_hhmm": "16:51" },
+    { "initiales": "Y.R.",  "t_act_pct": 80,   "solde_hhmm": "19:13" },
+    { "initiales": "H.S.",  "t_act_pct": 100,  "solde_hhmm": "-08:22" },
+    { "initiales": "T.C.",  "t_act_pct": 100,  "solde_hhmm": "-58:04" },
+    { "initiales": "M.J.",  "t_act_pct": 75,   "solde_hhmm": "-102:18" },
+    { "initiales": "H.C.",  "t_act_pct": 50,   "solde_hhmm": "13:59" },
+    { "initiales": "F.M.",  "t_act_pct": 50,   "solde_hhmm": "-37:00", "note": "ligne quasi entière en E (maladie prolongée)" },
+    { "initiales": "M.L.",  "t_act_pct": 80,   "solde_hhmm": "-3:27" },
+    { "initiales": "M.A.",  "t_act_pct": 80,   "solde_hhmm": "33:12" },
+    { "initiales": "D.GAE.", "t_act_pct": 100, "solde_hhmm": "4:26",   "note": "ligne quasi entière en E (maladie prolongée)" },
+    { "initiales": "F.C.",  "t_act_pct": 50,   "solde_hhmm": "74:04" },
+    { "initiales": "B.H.",  "t_act_pct": 60,   "solde_hhmm": "26:54" },
+    { "initiales": "E.L.",  "t_act_pct": 80,   "solde_hhmm": "49:23" }
+  ],
+  "effectifs_par_jour": [13, 13, 13, 12, 8, 8, 14, 14, 14, 13, 13, 9, 9, 14, 16, 12, 12, 13, 12, 8, 9, 14, 13, 13, 13, 13, 9, 9, 13, 13, 13],
+  "repartition_postes_par_jour": {
+    "IC": [1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+    "M":  [3, 4, 4, 0, 0, 0, 5, 4, 4, 4, 3, 3, 0, 0, 4, 5, 3, 3, 3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+    "S":  [3, 4, 4, 4, 0, 0, 5, 4, 4, 3, 3, 0, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+    "N":  [4, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+    "12": [2, 1, 1, 1, 5, 5, 0, 1, 1, 2, 2, 2, 5, 1, 0, 2, 2, 4, 5, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2]
+  },
+  "observations": [
+    "37 agents sur la grille ; IC (W.I.) en garde presque tous les jours ouvrés, absente le week-end (cohérent avec effectifs_min: 1 semaine / 0 WE).",
+    "Effectif total journalier : semaine ~12-16, week-end ~8-9 (ligne Total imprimée).",
+    "3 lignes quasi complètes en E (maladie prolongée) : R.F., F.M., D.GAE. ; soldes négatifs notables : M.J. -102:18, T.C. -58:04, F.M. -37:00.",
+    "Variantes horaires visibles en sous-index des cases : M1/M6, S1/S5/S6/S8, N1/N4/N8/N12 — horaires à confirmer (non modélisées).",
+    "Annotations SR/HP/HP_mauve visibles (SMUR, hospitalisation provisoire, poste 12h HP+SMUR)."
+  ],
+  "affectations_par_agent": null
+}

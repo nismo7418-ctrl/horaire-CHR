@@ -47,7 +47,7 @@
   "affectations_fixes": [
    {
     "date": "2026-10-04",
-    "code": "IC"
+    "code": "12"
    }
   ],
   "desiderata_brutes": "Aucun souhait particulier, je couvre les trous.",
@@ -184,5 +184,31 @@
   "habitudes": {
    "mer": "S"
   }
+ },
+ {
+  "nom": "W.I.",
+  "role": "infirmiere_en_chef",
+  "taux_occupation": 100,
+  "temps_du_mois_h": 167.2,
+  "solde_reporte_h": 0.0,
+  "affectations_fixes": [],
+  "desiderata_brutes": "Poste d'infirmière en chef : garde du jour. Aucune demande particulière.",
+  "habitudes": {
+   "lun": "IC",
+   "mar": "IC",
+   "mer": "IC",
+   "jeu": "IC",
+   "ven": "IC"
+  }
+ },
+ {
+  "nom": "M.T.",
+  "role": "infirmiere_en_chef",
+  "taux_occupation": 100,
+  "temps_du_mois_h": 167.2,
+  "solde_reporte_h": 0.0,
+  "affectations_fixes": [],
+  "desiderata_brutes": "Poste d'infirmière en chef : disponible pour les gardes du jour.",
+  "habitudes": {}
  }
 ]

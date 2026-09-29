@@ -1,7 +1,22 @@
 {
-  "_groupes_roles": {"infirmier_tous": ["siamu", "infirmier"]},
-  "_groupes_postes": {"jour": ["M", "S", "12"], "nuit": ["N"]},
+  "_groupes_roles": {
+    "infirmier_tous": ["siamu", "infirmier"],
+    "infirmiere_en_chef": ["infirmiere_en_chef"]
+  },
+  "_groupes_postes": {
+    "jour": ["M", "S", "12"],
+    "nuit": ["N"],
+    "ic": ["IC"]
+  },
 
-  "infirmier_tous": {"jour": 5, "nuit": 3},
-  "logistique": {"nuit": 1}
+  "infirmier_tous": {
+    "jour": {"semaine": 5, "weekend": 3},
+    "nuit": {"semaine": 3, "weekend": 1}
+  },
+  "infirmiere_en_chef": {
+    "ic": {"semaine": 1, "weekend": 0}
+  },
+  "logistique": {
+    "nuit": {"semaine": 1, "weekend": 1}
+  }
 }

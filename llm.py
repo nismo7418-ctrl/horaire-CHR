@@ -6,6 +6,7 @@ Température basse (0.1) : fiabilité structurelle > créativité.
 from __future__ import annotations
 
 import json
+import time
 from urllib.parse import urlsplit
 
 import requests
@@ -32,6 +33,41 @@ def _origine(url: str) -> str:
 
 def endpoint_est_local() -> bool:
     return urlsplit(LMSTUDIO_URL).netloc.split(":")[0] in ("localhost", "127.0.0.1", "::1")
+
+
+def statut_endpoint(timeout_s: float = 4.0) -> tuple[bool, str]:
+    """État du service LLM pour le badge d'interface.
+
+    Retourne (ok, detail) : ok=True si l'endpoint répond ET que le modèle
+    attendu est chargé. En cas d'erreur réseau, ok=False avec la raison.
+    """
+    # Racine du serveur : LMSTUDIO_URL peut être l'endpoint complet
+    # (…/v1/chat/completions) ou juste la racine — ne retirer que le préfixe /v1/.
+    server = LMSTUDIO_URL.split("/v1/", 1)[0].rstrip("/")
+    try:
+        r = requests.get(f"{server}/v1/models", timeout=timeout_s)
+        r.raise_for_status()
+        ids = [m.get("id", "") for m in r.json().get("data", [])]
+    except requests.RequestException as e:
+        return False, f"injoignable ({_origine(LMSTUDIO_URL)}) : {type(e).__name__}"
+    if MODELE not in ids and not any(i.endswith("/" + MODELE) for i in ids):
+        return False, f"modèle « {MODELE} » absent de la liste : {', '.join(ids[:3]) or 'aucun'}"
+    # API de gestion LM Studio : état de chargement exact — certaines versions
+    # listent aussi les modèles DÉCHARGÉS dans /v1/models, le badge ne doit pas
+    # les compter comme prêts.
+    try:
+        ra = requests.get(f"{server}/api/v0/models", timeout=timeout_s)
+        if ra.ok:
+            states = {m.get("id", ""): m.get("state") for m in ra.json().get("data", [])}
+            etat = states.get(MODELE) or next(
+                (s for i, s in states.items() if i.endswith("/" + MODELE)), None)
+            if etat == "loaded":
+                return True, f"modèle « {MODELE} » chargé"
+            if etat is not None:
+                return False, f"modèle « {MODELE} » non chargé (état : {etat})"
+    except requests.RequestException:
+        pass
+    return True, f"modèle « {MODELE} » listé (état de chargement non vérifiable)"
 
 
 class ErreurLLM(Exception):
@@ -118,6 +154,64 @@ RÈGLES STRICTES :
 }"""
 
 
+PROMPT_ARBITRAGE = """Tu es l'assistant du responsable de planification du service des urgences.
+Des desiderata souples (souhaits) n'ont pas été honorées par le planning calculé par un solveur
+contraintes. Ton rôle : proposer des arbitrages CONCRETS et EXACTEMENT de deux types, afin que le
+solveur puisse les recalculer. Tu ne modifies JAMAIS toi-même le planning.
+
+CONTEXTE FOURNI : mois, légende des postes, souhaits non honorés (avec la situation réelle du
+jour concerné), grille des jours ± 1 autour de chaque souhait (agent → code poste), éligibilité
+des rôles (postes autorisés / dérogables), planchers d'effectifs minimums par groupe et par jour.
+
+RÈGLES STRICTES :
+0. Les agents sont désignés UNIQUEMENT par leurs initiales (telles que fournies). N'invente jamais
+   une personne absente de la grille, une date hors du mois, ou un code absent de la légende.
+1. Chaque proposition doit être EXACTEMENT l'une de ces deux actions :
+   - "repos" : libérer l'agent le jour indiqué (résout un souhait_negatif) ;
+   - "echange" : échanger les postes de deux agents LE MÊME JOUR (résout un souhait_positif ou
+     un souhait_negatif si l'un des deux tient le poste indésirable).
+2. Ne propose JAMAIS une action qui violerait un plancher d'effectif minimum fourni
+   (ex: si l'agent est l'un des seuls du poste requis ce jour-là, ne propose pas son repos ;
+   trouve un collègue du même groupe qui tient un poste compatible à l'échange).
+3. Cible d'abord les souhaits de priorité "haute". Maximum 5 propositions, de la plus sûre à la
+   plus risquée. Si aucune action sûre n'existe pour un souhait, ne le propose pas.
+4. Pour chaque proposition : un motif en une phrase, factuel, qui renvoie au souhait adressé.
+5. Réponds UNIQUEMENT en JSON valide, sans texte avant/après, selon le schéma :
+
+{
+  "propositions": [
+    {"type": "repos", "agent": "P.K.", "date": "AAAA-MM-DD", "motif": "..."},
+    {"type": "echange", "agent_a": "P.K.", "agent_b": "N.M.", "date": "AAAA-MM-DD", "motif": "..."}
+  ]
+}"""
+
+PROMPT_AJUSTEMENT = """Tu es un analyste de planification hospitalière. L'utilisateur (responsable de la
+planification) formule un ajustement en langage naturel sur le planning (ex: « P.K. pas de nuit le
+17/10 »). Transforme-le en desiderata structurées, UNE PAR UNE. Tu ne produis JAMAIS de planning.
+
+RÈGLES STRICTES :
+0. Les agents sont désignés UNIQUEMENT par leurs initiales. N'invente jamais une personne absente
+du contexte, une date hors du mois fourni, ou un code absent de la légende.
+1. Chaque ligne doit contenir : personne (initiales), date (AAAA-MM-DD), categorie
+   (indisponibilite|impératif|souhait_positif|souhait_negatif), poste_concerne
+   (matin|soir|nuit|12h|infirmiere_en_chef|null), priorite (haute|moyenne|basse),
+   motif_resume (court, factuel).
+2. « pas de X le J » → souhait_negatif ; « je voudrais X le J » → souhait_positif ;
+   « X est posé/validé/obligatoire le J » → impératif ; « X ne peut pas travailler le J » →
+   indisponibilite. Si l'agent est concerné quel que soit le poste → poste_concerne null.
+3. Une date relative (« le 17 ») s'entend dans le mois du contexte. Si la date, la personne ou
+   l'intention reste indéterminée : place l'item dans "a_clarifier" avec une question précise.
+4. Réponds UNIQUEMENT en JSON valide, sans texte avant/après, selon le schéma :
+
+{
+  "ajustements": [
+    {"personne": "P.K.", "date": "AAAA-MM-DD", "categorie": "souhait_negatif",
+     "poste_concerne": "nuit", "priorite": "haute", "motif_resume": "..."}
+  ],
+  "a_clarifier": [{"question": "..."}]
+}"""
+
+
 def _extraire_json(texte: str) -> dict:
     """Parse le JSON d'une réponse LLM (tolère les ```json fences et le texte parasite)."""
     t = texte.strip()
@@ -132,24 +226,27 @@ def _extraire_json(texte: str) -> dict:
 
 
 def _appeler(system_prompt: str, contexte: dict, max_tokens: int = 2000) -> dict:
+    body = {
+        "model": MODELE,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(contexte, ensure_ascii=False)},
+        ],
+        "temperature": 0.1,
+        "max_tokens": max_tokens,
+        # Modèles à réflexion (Qwen3) : sans cette option, tout le budget de
+        # tokens part en « thinking » et `content` revient vide. Ignorée par
+        # les modèles non concernés.
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
     try:
-        r = requests.post(
-            LMSTUDIO_URL,
-            json={
-                "model": MODELE,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": json.dumps(contexte, ensure_ascii=False)},
-                ],
-                "temperature": 0.1,
-                "max_tokens": max_tokens,
-                # Modèles à réflexion (Qwen3) : sans cette option, tout le budget de
-                # tokens part en « thinking » et `content` revient vide. Ignorée par
-                # les modèles non concernés.
-                "chat_template_kwargs": {"enable_thinking": False},
-            },
-            timeout=_timeout_s(),
-        )
+        try:
+            r = requests.post(LMSTUDIO_URL, json=body, timeout=_timeout_s())
+        except requests.ConnectionError:
+            # LM Studio peut mettre quelques secondes à réagir après chargement du
+            # modèle (compilation du KV cache) — une nouvelle tentative suffit.
+            time.sleep(2)
+            r = requests.post(LMSTUDIO_URL, json=body, timeout=_timeout_s())
         r.raise_for_status()
         msg = r.json()["choices"][0]["message"]
         texte = (msg.get("content") or "").strip()
@@ -175,6 +272,63 @@ def analyser_desiderata(mois: str, legende_codes: dict,
     return _appeler(PROMPT_ANALYSTE, contexte)
 
 
+def proposer_arbitrages(mois: str, legende_codes: dict, souhaits_non_honores: list,
+                        grille: dict, personnel: list, effectifs_min: dict) -> dict:
+    """Prompt 3 — propose des arbitrages (repos / échanges) pour les souhaits non honorés.
+
+    Le LLM ne fait que PROPOSER : chaque proposition est vérifiée de manière déterministe
+    (solveur.verifier_repos / verifier_echange) avant application, puis le solveur recalcule.
+    """
+    from datetime import date, timedelta
+    import config as _cfg
+
+    def _fenetre(date_iso: str) -> list[str]:
+        try:
+            y, m, d = (int(v) for v in date_iso.split("-"))
+            j0 = date(y, m, d)
+        except (ValueError, TypeError):
+            return []
+        out = []
+        for off in (-1, 0, 1):
+            j = j0 + timedelta(days=off)
+            if (j.year, j.month) == (y, m):
+                out.append(j.isoformat())
+        return out
+
+    contexte_grille: dict = {}
+    for s in souhaits_non_honores:
+        for d in _fenetre(s.get("date", "")):
+            if d in grille:
+                contexte_grille[d] = grille[d]
+    contexte = {
+        "mois": mois,
+        "legende_codes": legende_codes,
+        "souhaits_non_honores": souhaits_non_honores,
+        "grille_jours_concernes": contexte_grille,
+        "eligibilite_roles": {
+            "postes_autorises": _cfg.POSTES_AUTORISES_PAR_ROLE,
+            "postes_derogables": _cfg.POSTES_DEROGABLES_PAR_ROLE,
+        },
+        "effectifs_min": {k: v for k, v in effectifs_min.items()},
+        "personnel": [{k: p.get(k) for k in ("nom", "role") if k in p} for p in personnel],
+    }
+    return _appeler(PROMPT_ARBITRAGE, contexte)
+
+
+def structurer_ajustement(mois: str, legende_codes: dict, initiales: list[str], texte: str) -> dict:
+    """P3.4 — ajustement conversationnel : « P.K. pas de nuit le 17/10 » → desiderata structurées.
+
+    L'ajustement est ensuite fusionné dans les desiderata de session et le solveur recalcule.
+    """
+    contexte = {
+        "mois": mois,
+        "legende_codes": legende_codes,
+        "personnel_autorise": initiales,
+        "ajustement_libre": texte,
+    }
+    return _appeler(PROMPT_AJUSTEMENT, contexte)
+
+
 def expliquer_planning(mois: str, legende_codes: dict,
                        planning_result: dict, desiderata: dict,
                        personnel: list, seuil_ecart_h: float = 8.0) -> dict:
@@ -188,6 +342,8 @@ def expliquer_planning(mois: str, legende_codes: dict,
         "heures_planifiees": planning_result.get("heures", {}),
         "stats_equite": planning_result.get("stats", {}),
         "desiderata_structurees": desiderata,
+        "souhaits_non_honores": planning_result.get("souhaits_non_honores", []),
+        "derogations": planning_result.get("derogations", []),
         "personnel": [
             {k: p.get(k) for k in ("nom", "role", "taux_occupation", "temps_du_mois_h", "solde_reporte_h") if k in p}
             for p in personnel

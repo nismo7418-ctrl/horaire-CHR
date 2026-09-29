@@ -10,13 +10,19 @@ MOIS_DEFAUT = "2026-10"
 # début en minutes depuis minuit, duree_min : durée en minutes (ENTIERS — CP-SAT
 # n'accepte que des coefficients entiers). Un poste "casse" le jour si
 # start_min + duree_min > 1440 (ex: nuit 19h→7h).
-# CONFIRMÉS : M = 6h54→15h00 (8h06), S = 13h15→21h00 (7h45), 12 = 9h00→21h00 (12h).
+# CONFIRMÉS : M = 6h54→15h00 (8h06), S = 13h15→21h00 (7h45), 12 = 9h00→21h00 (12h),
+# IC = 6h54→15h00 (8h06, confirmé par le service).
 # N (nuit) a des horaires VARIABLES selon le jour → voir NUIT_PAR_SEMAINE.
 POSTES = {
     "M":  {"libelle": "Matin",     "start_min": 414, "duree_min": 486},   # 6h54→15h00 (8h06)
     "S":  {"libelle": "Soir",      "start_min": 795, "duree_min": 465},   # 13h15→21h00 (7h45)
     "N":  {"libelle": "Nuit"},                                            # horaires variables → NUIT_PAR_SEMAINE
     "12": {"libelle": "Poste 12h", "start_min": 540, "duree_min": 720},   # 9h00→21h00 (12h)
+    "IC": {"libelle": "Infirmière en chef", "start_min": 414, "duree_min": 486},  # 6h54→15h00 (8h06)
+    # SMUR : confirmé réservé aux siamu (D7). SMUR mauve = 12h (9h00→21h00), confirmé.
+    # Aucune ligne d'effectif min ne le requiert encore : le solveur ne l'utilise pas
+    # tant que data/effectifs_min.json n'a pas de groupe contenant "SMUR".
+    "SMUR": {"libelle": "SMUR", "start_min": 540, "duree_min": 720},       # 9h00→21h00 (12h)
 }
 
 # Nuits : horaires variables selon le jour de la semaine (confirmés par le service).
@@ -61,6 +67,10 @@ ANNOTATIONS = {
     "HP_mauve": "postes 12h spécifiques : 9h00-13h15 HP puis 13h15-21h SMUR — confirmé",
     "ino": "à confirmer (inopérante / indispo ?)",
     "SB": "à confirmer",
+    # Variantes horaires sous les lettres (grilles 2023-2026, ex: M₁, S₈, N₁₂) :
+    # M1/M6, S1/S5/S6/S8, N1/N4/N8/N12 — ⚠️ À CONFIRMER : horaires exacts de chaque
+    # variante (le solveur traite M/S/N/12 comme un poste unique pour l'instant).
+    "variantes": "M1/M6, S1/S5/S6/S8, N1/N4/N8/N12 (sous-index des cases) — horaires à confirmer",
 }
 
 # Codes d'absence / statut vus dans la grille (non modélisés comme postes). À confirmer.
@@ -69,14 +79,49 @@ CODES_ABSANCE = {
     "DDI": "à confirmer (détachement ?)",
     "FO": "journée formation (obligatoire)",
     "U": "à confirmer",
-    "IC": "infirmière en chef (poste dédié, confirmé par le rôle)",
+    "IC": "infirmière en chef (poste dédié — maintenant modélisé dans POSTES)",
+    "C (fond vert)": "congé sans solde (CSS) — confirmé",
+    "E (fond rouge)": "maladie prolongée (point d'interrogation) — confirmé",
     "🌴": "congé / vacances",
     "❓ (fond jaune)": "journée formation (généralement — cf. FO)",
-    "❓ (fond rouge)": "maladie (dans certains cas)",
+    "❓ (fond rouge)": "maladie (dans certains cas — lignes entières rouges = longue absence)",
 }
 
 # Rôles reconnus par le solveur (champ "role" des agents).
-ROLES = ["siamu", "infirmier", "aide_soignant", "logistique"]
+# "infirmiere_en_chef" confirmé par les grilles réelles : section dédiée, 1 agent
+# à la garde la plupart des jours ouvrés (grilles 2023-2026, cf. data/historique_grilles.md).
+ROLES = ["siamu", "infirmier", "infirmiere_en_chef", "aide_soignant", "logistique"]
+
+# Élégibilité métier (contrainte dure D7) : quels postes un rôle peut tenir.
+# Règles confirmées par le service :
+#   - SMUR réservé aux siamu ;
+#   - aide-soignant : jours uniquement (M/S/12), pas de nuit ;
+#   - logistique : nuits, rarement le jour → dur ["N"] pour l'instant ; l'exception
+#     "rarement jour" sera gérée comme dérogation souple (P3) ;
+#   - infirmière en chef : poste IC uniquement.
+# None = tous les postes autorisés.
+POSTES_AUTORISES_PAR_ROLE = {
+    "siamu": None,  # tous postes y compris SMUR (seul rôle habilité au SMUR)
+    "infirmier": ["M", "S", "12"],
+    "infirmiere_en_chef": ["IC"],
+    "aide_soignant": ["M", "S", "12"],  # jours uniquement, jamais de nuit
+    "logistique": ["N"],                # nuits ; les jours → dérogation (ci-dessous)
+}
+
+# Dérogations métier (P3) : postes INTERDITS par défaut à un rôle (pas dans
+# POSTES_AUTORISES_PAR_ROLE) mais qui peuvent être attribués moyennant une pénalité
+# config.POIDS["derogation"] dans la fonction objective. Gère le « logistique rarement
+# jour » et les exceptions individuelles (ex: un logistique « pas de nuit » qui prend
+# donc des jours — le solveur privilégie la dérogation si elle satisfait mieux les
+# souhaits que le respect strict du rôle). Les postes ni autorisés ni dérogables restent
+# interdits durs (ex: IC/SMUR pour un logistique).
+POSTES_DEROGABLES_PAR_ROLE = {
+    "siamu": [],
+    "infirmier": [],
+    "infirmiere_en_chef": [],
+    "aide_soignant": [],
+    "logistique": ["M", "S", "12"],  # « rarement jour » → jours dérogables
+}
 
 # Repos quotidien minimal entre la fin d'un poste et le début du suivant (loi 16/03/1971).
 # En minutes (11h = 660).
@@ -97,11 +142,13 @@ POSTES_EXEMPTS_NUIT = ["N"]
 # Poids de la fonction objective (contraintes souples).
 POIDS = {
     "heures": 100,  # écart |heures planifiées - heures dues|
+    "solde_negatif": 100,  # pénalise un solde fin de mois négatif (S5)
     "souhait_negatif": {"haute": 200, "moyenne": 100, "basse": 50},
     "souhait_positif": {"haute": 100, "moyenne": 50,  "basse": 25},
     "equite_nuits": 10,    # minimise le max de nuits par personne dans un rôle
     "equite_weekends": 5,  # minimise le max de jours week-end travaillés par rôle
     "habitude": 60,        # bonus si l'agent fait son poste habituel le jour concerné (S4)
+    "derogation": 100,     # pénalise un poste hors rôle attribué via dérogation (P3)
 }
 
 # Noms de jours acceptés dans "habitudes" des agents (personnel.json) → weekday python.

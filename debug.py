@@ -36,7 +36,7 @@ test(REPOS_QUOTIDIEN_H=1, SEMAINE_MAX_JOURS_TRAVAILLES=7)
 print("== Sans D4 (effectifs min = 0, baseline D5/D6) ==")
 config.REPOS_QUOTIDIEN_H = 11
 config.SEMAINE_MAX_JOURS_TRAVAILLES = 5
-em0 = {k: {c: 0 for c in v} for k, v in em.items()}
+em0 = {k: (v if k.startswith("_") else {c: 0 for c in v}) for k, v in em.items()}
 r = solveur.resoudre(mois=config.MOIS_DEFAUT, personnel=personnel,
                      effectifs_min=em0, desiderata={}, time_limit_s=20)
 print("effectifs=0 (baseline D5/D6) ->", r["statut"])

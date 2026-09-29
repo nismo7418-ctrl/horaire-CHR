@@ -4,6 +4,8 @@
   comparaison en temps constant (hmac.compare_digest) — pas d'attaque par timing.
   Générer la valeur de stockage : `python -c "import auth; print(auth.hacher('VOTRE_MDP'))"`
 - Brute-force : 5 échecs consécutifs (par IP client) → verrouillage 5 minutes.
+  Le compteur est en mémoire de process : il n'est pas partagé entre workers —
+  à garder en tête si l'app passe en multi-instances (alors filtrer au proxy).
 - Session : `st.session_state` uniquement (rien de persistant), expiration
   automatique après 30 min d'inactivité (env `APP_SESSION_TIMEOUT_S`).
 - Déconnexion = effacement de toutes les données de session (droit à l'effacement).
@@ -47,16 +49,43 @@ def verifie(mdp: str, stockage: str) -> bool:
 
 
 def _ip_client() -> str:
+    """IP client pour le compteur de verrouillage.
+
+    `x-forwarded-for` : on prend la DERNIÈRE valeur — c'est celle ajoutée par le
+    reverse proxy de confiance en bout de chaîne. Le PREMIER maillon est contrôlé
+    par le client lui-même : un attaquant qui le changeait à chaque tentative
+    partait à zéro d'échecs, contournant le verrouillage.
+    Hypothèse : un seul proxy de confiance qui AJOUTE l'IP réelle (nginx real_ip,
+    Caddy, …). Si l'hébergeur expose plutôt `x-real-ip` (pas de chaîne XFF),
+    on le prend en repli. Si aucun hop de confiance n'est garanti, ce
+    rate-limit par IP n'est fiable ni sur la première ni sur la dernière valeur
+    — c'est alors le proxy/hébergeur qui doit filtrer.
+    """
     try:
         import streamlit as st
-        ip = st.context.headers.get("x-forwarded-for", "local")
-        return ip.split(",")[0].strip() or "local"
+        h = st.context.headers
+        xff = h.get("x-forwarded-for")
+        if xff:
+            ip = xff.split(",")[-1].strip()
+            if ip:
+                return ip
+        ip = (h.get("x-real-ip") or "").strip()
+        return ip or "local"
     except Exception:
         return "local"
 
 
+def _purger() -> None:
+    """Supprime les IP dont les échecs sont tous vieillis (fuite mémoire lente sur longue durée)."""
+    now = time.monotonic()
+    limite = FENETRE_ECHECS_S + DEBLOCAGE_S
+    for ip in [ip for ip, ts in _echecs.items() if not ts or now - max(ts) > limite]:
+        del _echecs[ip]
+
+
 def _enregistrer_echec(ip: str) -> None:
     now = time.monotonic()
+    _purger()
     recent = [t for t in _echecs.get(ip, []) if now - t < FENETRE_ECHECS_S]
     recent.append(now)
     _echecs[ip] = recent
@@ -81,8 +110,14 @@ def connecter(user: str, mdp: str) -> tuple[bool, str | None]:
                        "(voir `.streamlit/secrets.toml.example`).")
     if _verrouille(ip):
         return False, f"Trop de tentatives échouées — réessayez dans {DEBLOCAGE_S // 60} minutes."
-    ok = hmac.compare_digest(user, ident) and verifie(mdp, stock)
-    if not ok:
+    # Les deux vérifications sont TOUJOURS calculées, dans l'ordre, avant de
+    # combiner : un `and` court-circuité ne lançait pas le PBKDF2 (~dizaines de ms)
+    # quand l'identifiant était mauvais — le temps de réponse distinguait alors
+    # « identifiant faux » de « identifiant bon, mot de passe faux ». Les comparer
+    # en octets évite aussi la TypeError de compare_digest sur un identifiant non-ASCII.
+    user_ok = hmac.compare_digest(user.encode("utf-8"), ident.encode("utf-8"))
+    mdp_ok = verifie(mdp, stock)
+    if not (user_ok and mdp_ok):
         _enregistrer_echec(ip)
         return False, "Identifiant ou mot de passe incorrect."
     _echecs.pop(ip, None)
