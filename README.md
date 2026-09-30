@@ -25,10 +25,12 @@ le résultat en aval. Une hallucination du modèle ne peut pas corrompre une aff
 
 | Fichier | Rôle |
 |---|---|
-| `config.py` | **Toute la donnée métier** : horaires des postes, repos 11h, repos hebdo, nuit 8h, poids des contraintes souples |
+| `config.py` | **Toute la donnée métier** : horaires des postes, repos 11h, repos hebdo, nuit 8h, poids des contraintes souples, seuils de diagnostic |
 | `solveur.py` | Modèle CP-SAT : variables, contraintes dures (D1-D7), souples (S1-S5), extraction |
-| `llm.py` | Client LM Studio + les 2 prompts système (température 0.1) |
-| `app.py` | App Streamlit (3 onglets) : saisie → analyse LLM → résolution → grille/heures/export CSV+Excel |
+| `diagnostic.py` | Diagnostic déterministe post-résolution (nuits consécutives, équité, cumuls, soldes, habitudes, mémoire inter-mois) — zéro LLM, zéro solveur |
+| `state.py` | Persistance des états (`data/state/{mois}.json`) : desiderata, contraintes, grille + stats (mémoire inter-mois) |
+| `llm.py` | Client LM Studio + les prompts système (température 0.1) |
+| `app.py` | App Streamlit (3 onglets) : saisie → analyse LLM → résolution → grille/heures/diagnostic/export CSV+Excel |
 | `data/personnel.json` | 18 agents d'exemple (rôles, taux, heures dues, desiderata brutes ; 2 infirmières en chef) |
 | `data/historique/` | Grilles historiques transcrites (JSON) — mémoire du service, backtest (P2) |
 | `data/effectifs_min.json` | Effectifs minimums par groupe de rôles / groupe de postes, avec différenciation semaine / week-end |
@@ -65,6 +67,36 @@ Contraintes souples (objectives pondérées, cf. `config.POIDS`) : respect des h
 **S4 — habitudes horaires** (bonus si l'agent tient son poste habituel le jour concerné ;
 saisie dans `data/personnel.json`, champ `habitudes`, ou dans l'onglet 2 de l'app),
 équité des nuits et des week-ends au sein de chaque rôle.
+
+## Intelligence — diagnostic, mémoire inter-mois, explication causale
+
+Trois couches déterministes entourent le solveur. Le LLM les consomme **en lecture seule**
+(principe validé : le LLM ne touche jamais la grille).
+
+1. **Diagnostic déterministe** (`diagnostic.py`) — après résolution, `diagnostiquer()`
+   analyse la grille sans LLM ni solveur :
+   - nuits consécutives (seuil `config.NUITS_CONSECUTIVES_MAX`),
+   - équité des nuits / week-ends au sein de chaque rôle
+     (`config.EQUITE_ECART_MAX`, `config.EQUITE_WKND_ECART_MAX`),
+   - cumuls inter-mois (`config.NUITS_CUMULEES_MAX`, `config.WKND_CUMULES_MAX`),
+   - soldes fin de mois négatifs, stabilité des habitudes
+     (ratio min `RATIO_HABITUDE_MIN` dans `diagnostic.py`).
+   Affiché en onglet 3, avant la section arbitrages ; warnings triés avant infos.
+   Aucune exception : sections dégradées proprement si les données manquent.
+2. **Mémoire inter-mois** — `state.sauver()` persiste `grille` + `stats` du mois dans
+   `data/state/{mois}.json` ; le mois suivant, `diagnostiquer()` charge le mois
+   précédent via `state.charger_resultat()` et compare (équité sur 2 mois, cumuls).
+   Premier mois (pas de fichier) → section dégradée, pas d'erreur.
+3. **Explication causale exacte** — `llm.expliquer_planning(..., diagnostic=...)` injecte
+   le diagnostic factuel (`diagnostic_deterministe`) dans le contexte de `PROMPT_ARBITRE` ;
+   règle 5 : les chiffres du diagnostic sont des **faits** à reprendre tels quels
+   (`alertes_equite`, `ecarts_temps_signales`), jamais reformulés en « cause probable ».
+
+**À venir (non implémentés, à valider)** — points 4-5 du plan d'intelligence :
+- *auto-optimisation itérative* : recycler les alertes du diagnostic en contraintes
+  souples supplémentaires puis re-solver ;
+- *détection de conflits anticipés* : simuler avant validation des desiderata pour
+  signaler les incohérences dès la saisie.
 
 ## ⚠️ À VALIDER AVANT MISE EN PRODUCTION
 

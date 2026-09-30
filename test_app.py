@@ -39,4 +39,14 @@ assert not at.exception, f"Exceptions après calcul : {at.exception}"
 tab3 = at.tabs[2]
 assert any("Résultats" in (s.value or "") for s in tab3.subheader)
 assert len(tab3.dataframe) >= 1
-print("TEST APP : OK (authentification + 3 onglets + solveur)")
+
+# Phase « intelligence » : diagnostic déterministe peuplé + grille/stats persistés
+# (mémoire inter-mois pour le mois suivant)
+import config as cfg_app
+import state as state_mod
+diag = at.session_state["diagnostic"]
+assert isinstance(diag, dict) and diag["mois"] == cfg_app.MOIS_DEFAUT, diag
+assert isinstance(diag["alertes"], list), diag.keys()
+grille_pers, stats_pers = state_mod.charger_resultat(cfg_app.MOIS_DEFAUT)
+assert grille_pers and stats_pers, "grille/stats doivent être persistés pour la mémoire inter-mois"
+print("TEST APP : OK (authentification + 3 onglets + solveur + diagnostic déterministe + persistance résultat)")

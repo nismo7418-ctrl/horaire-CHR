@@ -18,8 +18,10 @@ import time
 import pandas as pd
 import streamlit as st
 
+import arbitre
 import auth
 import config
+import diagnostic
 import exporter
 import llm
 import solveur
@@ -57,27 +59,12 @@ def charger() -> tuple[list, dict]:
 
 
 def _precheck(effectifs_min: dict, personnel: list) -> list[str]:
-    """Contrôle préalable : planchers minimums vs nombre d'agents par groupe de rôles."""
-    avertissements = []
-    groupes_roles = effectifs_min.get("_groupes_roles", {})
-    for cle, postes in effectifs_min.items():
-        if str(cle).startswith("_groupes"):
-            continue
-        roles_cle = groupes_roles.get(cle, [cle])
-        agents = [p for p in personnel if p.get("role") in roles_cle]
-        for cle_poste, n in postes.items():
-            n_max = max(n.values()) if isinstance(n, dict) else n
-            if not n_max:
-                continue
-            if len(agents) < n_max:
-                avertissements.append(
-                    f"Plancher « {cle} / {cle_poste} = {n} » : seulement {len(agents)} agent(s) "
-                    f"dans les rôles {roles_cle} — a priori infaisable.")
-            elif len(agents) == n_max:
-                avertissements.append(
-                    f"Plancher « {cle} / {cle_poste} = {n} » = effectif total du groupe — "
-                    f"aucune marge (un congé suffit à rendre la journée infaisable).")
-    return avertissements
+    """Contrôle préalable : planchers vs effectif réel par groupe de rôles.
+
+    Source unique : solveur.avertissements_planchers — la même logique que le
+    solveur (aucune divergence possible entre l'UI et la résolution).
+    """
+    return solveur.avertissements_planchers(effectifs_min, personnel)
 
 
 # ── État de session ─────────────────────────────────────────────────────
@@ -90,7 +77,8 @@ if "personnel" not in st.session_state:
     st.session_state.contraintes_extras: list = []  # arbitrages appliqués (contraintes dures)
     st.session_state.propositions: list = []        # propositions LLM en attente (onglet 3)
     st.session_state.erreurs_arbitrage: list = []   # motifs de refus des dernières propositions
-    st.session_state._etat_charge = False           # P4 — état persisté déjà rechargé pour ce mois
+    st.session_state.diagnostic: dict | None = None  # phase « intelligence » — analyse déterministe du planning
+    st.session_state._etat_mois: str | None = None  # P4 — mois pour lequel l'état persisté a été chargé
 
 st.title("Planning — Service des urgences")
 
@@ -104,14 +92,22 @@ with st.sidebar:
     if not mois_ok:
         st.error(f"Mois invalide : « {mois} » — format attendu AAAA-MM (ex : 2026-10).")
 
-    # P4 — persistance : recharge l'état (desiderata + arbitrages) du mois, une fois par session
-    if mois_ok and not st.session_state.get("_etat_charge"):
-        _etat = state.charger((mois or "").strip())
+    # P4 — persistance : recharge l'état (desiderata + arbitrages) quand le mois change
+    mois_key = (mois or "").strip()
+    if mois_ok and st.session_state.get("_etat_mois") != mois_key:
+        _etat = state.charger(mois_key)
         st.session_state.desiderata = _etat["desiderata"]
         st.session_state.contraintes_extras = _etat["contraintes_extras"]
-        st.session_state._etat_charge = True
+        # Résultats rattachés à l'ancien mois → obsolètes (un export les nommait du mauvais mois)
+        st.session_state.planning = None
+        st.session_state.explication = None
+        st.session_state.propositions = []
+        st.session_state.erreurs_arbitrage = []
+        st.session_state.diagnostic = None
+        st.session_state.duree_reso_s = None
+        st.session_state._etat_mois = mois_key
         if _etat["desiderata"] or _etat["contraintes_extras"]:
-            st.caption("↺ Session rechargée (desiderata + arbitrages persistés du mois).")
+            st.caption(f"↺ Session rechargée pour {mois_key} (desiderata + arbitrages persistés).")
     seuil_ecart = st.number_input("Seuil écart heures (h)", min_value=0.0, value=8.0, step=1.0)
     time_limit = st.number_input("Temps de résolution max (s)", min_value=5, value=config.TIME_LIMIT_S, step=5)
     st.caption("⚠️ Les bases légales (repos 11h, nuit 8h en 21h-6h, repos hebdo) sont indicatives — "
@@ -131,8 +127,9 @@ with st.sidebar:
         st.session_state.contraintes_extras = []
         st.session_state.propositions = []
         st.session_state.erreurs_arbitrage = []
+        st.session_state.diagnostic = None
         st.session_state.duree_reso_s = None
-        st.session_state._etat_charge = True          # ne pas recharger l'ancien état après rerun
+        st.session_state._etat_mois = None            # prochain run : recharge (fichier effacé → vide)
         if mois_ok:
             state.effacer((mois or "").strip())       # P4 — supprime data/state/{mois}.json
         st.rerun()
@@ -178,10 +175,27 @@ def legende_etendu() -> dict:
 # P3 — Boucle d'arbitrage : fonctions partagées entre les onglets 2 et 3
 # ────────────────────────────────────────────────────────────────────────
 def _sauver_etat():
-    """P4 — persiste desiderata + contraintes_extras dans data/state/{mois}.json."""
+    """P4 — persiste desiderata + contraintes_extras + résultat (grille/stats)
+    dans data/state/{mois}.json — la grille/stats alimentent la mémoire inter-mois."""
     if mois_ok:
+        pl = st.session_state.planning or {}
         state.sauver((mois or "").strip(),
-                     st.session_state.desiderata, st.session_state.contraintes_extras)
+                     st.session_state.desiderata, st.session_state.contraintes_extras,
+                     grille=pl.get("grille"), stats=pl.get("stats"))
+
+
+def _diagnostiquer_resultat():
+    """Phase « intelligence » — analyse déterministe du planning courant (pas de LLM)."""
+    pl = st.session_state.planning or {}
+    if pl.get("statut") not in ("OPTIMAL", "FEASIBLE"):
+        st.session_state.diagnostic = None
+        return
+    try:
+        st.session_state.diagnostic = diagnostic.diagnostiquer(
+            pl.get("grille") or {}, pl.get("stats") or {},
+            st.session_state.personnel, (mois or "").strip())
+    except Exception:
+        st.session_state.diagnostic = None
 
 
 def _lancer_reso(contraintes_extras: list | None = None,
@@ -213,66 +227,53 @@ def _lancer_reso(contraintes_extras: list | None = None,
     st.session_state.erreurs_arbitrage = []
     st.session_state.contraintes_extras = list(contraintes_extras or [])
     st.session_state.duree_reso_s = round(time.monotonic() - t0, 1)
+    _diagnostiquer_resultat()
     _sauver_etat()
     st.rerun()
 
 
 def _fusion_extras(existants: list, nouveaux: list) -> list:
-    """Fusionne deux listes de contraintes_extras — un seul poste forcé par (agent, date)."""
-    m: dict = {}
-    for e in list(existants or []) + list(nouveaux or []):
-        m[(e.get("agent"), e.get("date"))] = e
-    return list(m.values())
+    """Fusionne deux listes de contraintes_extras — implémentation : arbitre.fusion_extras."""
+    return arbitre.fusion_extras(existants, nouveaux)
 
 
 def _extras_depuis_propositions(propositions: list) -> tuple[list, list[str]]:
-    """Vérifie chaque proposition LLM (repos / échange) et construit les contraintes_extras.
-
-    Retourne (extras, erreurs) : les propositions refusées arrivent dans `erreurs` avec le
-    motif déterministe (plancher, affectation fixe, repos < 11h, rôle inéligible).
-    """
+    """Vérifie chaque proposition LLM (repos / échange) — implémentation :
+    arbitre.verifier_propositions (grille lue depuis st.session_state.planning)."""
     pl = st.session_state.planning or {}
-    grille = pl.get("grille") or {}
-    extras: list = []
-    erreurs: list[str] = []
-    for prop in propositions:
-        t = prop.get("type")
-        if t == "repos":
-            ok, errs = solveur.verifier_repos(
-                mois, st.session_state.personnel, st.session_state.effectifs_min,
-                grille, prop.get("agent", ""), prop.get("date", ""))
-            if not ok:
-                erreurs.append(f"repos « {prop.get('agent')} » {prop.get('date')} : " + " ; ".join(errs))
-                continue
-            extras.append({"agent": prop["agent"], "date": prop["date"], "code": "repos"})
-        elif t == "echange":
-            a, b, d = prop.get("agent_a", ""), prop.get("agent_b", ""), prop.get("date", "")
-            ok, errs = solveur.verifier_echange(
-                mois, st.session_state.personnel, st.session_state.effectifs_min,
-                grille, a, b, d)
-            if not ok:
-                erreurs.append(f"échange « {a} ↔ {b} » {d} : " + " ; ".join(errs))
-                continue
-            jour = grille.get(d) or {}
-            extras.append({"agent": a, "date": d, "code": jour.get(b, "")})
-            extras.append({"agent": b, "date": d, "code": jour.get(a, "")})
-        else:
-            erreurs.append(f"Proposition inconnue ignorée : {prop}")
-    return extras, erreurs
+    return arbitre.verifier_propositions(
+        mois, st.session_state.personnel, st.session_state.effectifs_min,
+        pl.get("grille") or {}, propositions)
 
 
 def _autopilot():
-    """P3.3 — « Tout faire » : solve → propositions LLM → application vérifiée → re-solve → explication."""
+    """P3.3 — « Tout faire » : arbitre.arbitrer (solve → LLM propose → vérification
+    déterministe → re-solve) → explication. La boucle vit dans arbitre.py (testable).
+    Le LLM (injecté via `proposer`) ne fait que proposer ; il ne touche jamais la grille."""
     t0 = time.monotonic()
-    with st.spinner("🚀 Étape 1/4 — Résolution initiale..."):
+    st.session_state.propositions = []
+    st.session_state.erreurs_arbitrage = []
+
+    def proposer(snh: list, grille: dict) -> dict:
+        ar = llm.proposer_arbitrages(
+            mois, legende_etendu(), snh, grille,
+            st.session_state.personnel, st.session_state.effectifs_min)
+        # Retenues pour l'affichage onglet 3 (arbitre.py re-filtre indépendamment).
+        st.session_state.propositions = [
+            p for p in (ar.get("propositions") or [])
+            if p.get("type") in ("repos", "echange")][:5]
+        return ar
+
+    with st.spinner("🚀 Étapes 1–3/4 — solve → arbitrages (LLM) → re-solve..."):
         try:
-            res = solveur.resoudre(
+            res, extras_finales, erreurs = arbitre.arbitrer(
                 mois=mois,
                 personnel=st.session_state.personnel,
                 effectifs_min=st.session_state.effectifs_min,
                 desiderata=st.session_state.desiderata,
                 contraintes_extras=st.session_state.contraintes_extras,
                 time_limit_s=time_limit,
+                proposer=proposer,
                 hint_grille=(st.session_state.planning or {}).get("grille"),  # P4 — warm start
             )
         except solveur.ErreurConfig as e:
@@ -280,46 +281,15 @@ def _autopilot():
             st.rerun()
             return
     st.session_state.planning = res
+    st.session_state.contraintes_extras = extras_finales
     st.session_state.explication = None
-    st.session_state.propositions = []
-    st.session_state.erreurs_arbitrage = []
+    st.session_state.erreurs_arbitrage = erreurs
     if res["statut"] not in ("OPTIMAL", "FEASIBLE"):
         st.session_state.duree_reso_s = round(time.monotonic() - t0, 1)
         st.rerun()
         return
-
-    # Étapes 2–3 : arbitrages (uniquement s'il y a des souhaits non honorés)
-    if res.get("souhaits_non_honores"):
-        try:
-            with st.spinner("🚀 Étape 2/4 — Proposition d'arbitrages (LLM local)..."):
-                ar = llm.proposer_arbitrages(
-                    mois, legende_etendu(), res["souhaits_non_honores"], res["grille"],
-                    st.session_state.personnel, st.session_state.effectifs_min)
-            props = [p for p in (ar.get("propositions") or [])
-                     if p.get("type") in ("repos", "echange")][:5]
-            st.session_state.propositions = props
-            if props:
-                extras, _errs = _extras_depuis_propositions(props)
-                if extras:
-                    merged = _fusion_extras(st.session_state.contraintes_extras, extras)
-                    with st.spinner(f"🚀 Étape 3/4 — Re-solve avec {len(extras)} contrainte(s) d'arbitrage..."):
-                        res2 = solveur.resoudre(
-                            mois=mois,
-                            personnel=st.session_state.personnel,
-                            effectifs_min=st.session_state.effectifs_min,
-                            desiderata=st.session_state.desiderata,
-                            contraintes_extras=merged,
-                            time_limit_s=time_limit,
-                            hint_grille=res.get("grille"),  # P4 — warm start depuis le solve initial
-                        )
-                    if res2["statut"] in ("OPTIMAL", "FEASIBLE"):
-                        res = res2
-                        st.session_state.planning = res
-                        st.session_state.contraintes_extras = merged
-                    else:
-                        st.warning("Re-solve avec arbitrages infeasible — planning initial conservé.")
-        except llm.ErreurLLM as e:
-            st.error(f"Arbitrages LLM indisponibles : {e}")
+    for e in erreurs:
+        st.warning(e)
 
     # Étape 4 : explication
     try:
@@ -327,10 +297,12 @@ def _autopilot():
             st.session_state.explication = llm.expliquer_planning(
                 mois, legende_etendu(), res,
                 st.session_state.desiderata, st.session_state.personnel,
-                seuil_ecart_h=seuil_ecart)
+                seuil_ecart_h=seuil_ecart,
+                diagnostic=st.session_state.get("diagnostic"))
     except llm.ErreurLLM as e:
         st.error(f"Explication LLM impossible : {e}")
     st.session_state.duree_reso_s = round(time.monotonic() - t0, 1)
+    _diagnostiquer_resultat()
     _sauver_etat()
     st.rerun()
 
@@ -414,11 +386,13 @@ with tab1:
 # ────────────────────────────────────────────────────────────────────────
 with tab2:
     st.subheader("Calcul du planning (solveur CP-SAT)")
-    for a in _precheck(st.session_state.effectifs_min, st.session_state.personnel):
+    _avert_pre = _precheck(st.session_state.effectifs_min, st.session_state.personnel)
+    for a in _avert_pre:
         st.warning(a)
     n_des = sum(len(b.get("structurees", [])) for b in st.session_state.desiderata.values())
+    eff_aff = {k: v for k, v in st.session_state.effectifs_min.items() if not str(k).startswith("_")}
     st.write(f"- **Personnel** : {len(st.session_state.personnel)} agents")
-    st.write(f"- **Effectifs min/jour** : {st.session_state.effectifs_min}")
+    st.write(f"- **Effectifs min/jour** : {eff_aff}")
     st.write(f"- **Desiderata structurées** : {n_des}")
 
     # ── Habitudes hebdomadaires (contrainte souple S4) ─────────────────────
@@ -482,6 +456,8 @@ with tab2:
         if st.session_state.get("duree_reso_s") is not None:
             st.caption(f"Temps de résolution : {st.session_state.duree_reso_s} s")
         for w in pl.get("warnings", []):
+            if w in _avert_pre:
+                continue  # déjà affiché en tête d'onglet (pré-check) — source unique solveur.py
             st.warning(w)
         if not ok:
             st.info("Pistes : vérifier les dates impératives, les effectifs minimums vs effectif présent, "
@@ -510,6 +486,20 @@ with tab3:
     ecart_max = dfh["ecart_h"].apply(abs).max()
     if ecart_max > seuil_ecart:
         st.warning(f"Écart max {ecart_max} h dépasse le seuil de {seuil_ecart} h — l'explication LLM (ci-dessous) doit en rendre compte.")
+
+    # ── Phase « intelligence » — diagnostic déterministe (sans LLM) ──────
+    diag = st.session_state.get("diagnostic") or {}
+    if diag:
+        st.markdown("#### Diagnostic (analyse déterministe — seuils dans `config.py`)")
+        if diag["alertes"]:
+            for a in diag["alertes"]:
+                (st.warning if a.get("niveau") == "warning" else st.info)(a.get("texte", ""))
+        else:
+            st.success("Aucune alerte : nuits consécutives, équité, cumuls inter-mois, "
+                       "soldes et habitudes — ce planning passe tous les seuils.")
+        if not diag.get("memoire_disponible"):
+            st.caption("Pas de mémoire inter-mois (résultat du mois précédent non persisté) — "
+                       "le cumul 2 mois est indisponible pour ce mois.")
 
     # ── P3 — boucle d'arbitrage ──────────────────────────────────────────
     st.markdown("#### Arbitrages (P3 — souhaits non honorés)")
@@ -568,6 +558,7 @@ with tab3:
         with p2:
             if st.button("🗑 Purger les propositions"):
                 st.session_state.propositions = []
+                st.session_state.erreurs_arbitrage = []   # motifs de refus obsolètes
                 st.rerun()
 
     # ── P3.4 — ajustement libre (langage naturel) ─────────────────────────
@@ -628,7 +619,8 @@ with tab3:
             try:
                 st.session_state.explication = llm.expliquer_planning(
                     mois, legende_etendu(), pl, st.session_state.desiderata,
-                    st.session_state.personnel, seuil_ecart_h=seuil_ecart)
+                    st.session_state.personnel, seuil_ecart_h=seuil_ecart,
+                    diagnostic=st.session_state.get("diagnostic"))
                 st.rerun()
             except llm.ErreurLLM as e:
                 st.error(str(e))

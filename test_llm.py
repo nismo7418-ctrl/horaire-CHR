@@ -17,7 +17,7 @@ import requests
 import llm
 
 
-def _contenu_cru(system_prompt: str, contexte: dict, max_tokens: int = 2000) -> tuple[str, str]:
+def _contenu_cru(system_prompt: str, contexte: dict, max_tokens: int) -> tuple[str, str]:
     """Appel minimal direct (hors `_appeler`) : retourne (finish_reason, content).
 
     Budget aligné sur les appels de production (2000/3000) : le modèle « qwen35 »
@@ -66,12 +66,14 @@ def main() -> int:
     }
 
     echecs = []
-    for nom_prompt, prompt, ctx in (
-        ("analyste (Prompt 1)", llm.PROMPT_ANALYSTE, ctx1),
-        ("arbitre (Prompt 2)", llm.PROMPT_ARBITRE, ctx2),
+    for nom_prompt, prompt, ctx, budget in (
+        ("analyste (Prompt 1)", llm.PROMPT_ANALYSTE, ctx1, 2000),
+        # 3000 = budget de production (`expliquer_planning` → `_appeler(..., max_tokens=3000)`) :
+        # le modèle répond verbeusement sur le prompt arbitre (règle 5 : chiffres exacts).
+        ("arbitre (Prompt 2)", llm.PROMPT_ARBITRE, ctx2, 3000),
     ):
         try:
-            finish, content = _contenu_cru(prompt, ctx)
+            finish, content = _contenu_cru(prompt, ctx, max_tokens=budget)
         except Exception as e:  # noqa: BLE001 — le test doit signaler tout échec d'appel
             echecs.append(f"{nom_prompt} : erreur d'appel — {type(e).__name__} : {e}")
             continue

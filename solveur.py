@@ -113,6 +113,40 @@ def _effectif_valide(n) -> bool:
     return False
 
 
+def avertissements_planchers(effectifs_min: dict, personnel: list) -> list[str]:
+    """Contrôle planchers vs effectif réel par groupe de rôles — SOURCE UNIQUE.
+
+    Partagée par le solveur (`_valider_config`) et l'UI (app.py) pour éviter deux
+    implémentations divergentes (ex: gestion du `n_max` boolien).
+      - effectif < plancher → « a priori infaisable » ;
+      - effectif = plancher → « aucune marge » (un congé suffit à casser la journée).
+    Les valeurs invalides (bool, négatif, dict partiel) sont ignorées ici :
+    `_valider_config` les signale en ErreurConfig avant la résolution.
+    """
+    avertissements: list[str] = []
+    groupes_roles = effectifs_min.get("_groupes_roles", {})
+    for cle, postes in effectifs_min.items():
+        if str(cle).startswith("_"):
+            continue  # métadonnées (_note, _historique, _groupes_*)
+        roles_cle = groupes_roles.get(cle, [cle])
+        n_agents = sum(1 for p in personnel if p.get("role") in roles_cle)
+        for cle_poste, n in postes.items():
+            if not _effectif_valide(n):
+                continue
+            n_max = max(n.values()) if isinstance(n, dict) else n
+            if n_max <= 0:
+                continue
+            if n_agents < n_max:
+                avertissements.append(
+                    f"Plancher « {cle} / {cle_poste} = {n} » : seulement {n_agents} agent(s) "
+                    f"dans les rôles {roles_cle} — a priori infaisable.")
+            elif n_agents == n_max:
+                avertissements.append(
+                    f"Plancher « {cle} / {cle_poste} = {n} » = effectif total du groupe — "
+                    f"aucune marge (un congé suffit à rendre la journée infaisable).")
+    return avertissements
+
+
 def _valider_config(effectifs_min: dict, personnel: list, jours: list[date]) -> list[str]:
     roles_connus = {p.get("role") for p in personnel}
     groupes_roles = effectifs_min.get("_groupes_roles", {})
@@ -153,20 +187,8 @@ def _valider_config(effectifs_min: dict, personnel: list, jours: list[date]) -> 
                     f"Soit ajuster les horaires dans config.POSTES, soit l'ajouter à config.POSTES_EXEMPTS_NUIT "
                     f"si la CCT/règlement de travail le permet."
                 )
-    # Prévenir (sans bloquer) si un effectif minimum n'a aucun agent pour l'assurer.
-    avertissements: list[str] = []
-    groupes_roles = effectifs_min.get("_groupes_roles", {})
-    for cle, postes in effectifs_min.items():
-        if cle.startswith("_groupes"):
-            continue
-        roles_cle = groupes_roles.get(cle, [cle])
-        n_agents = sum(1 for p in personnel if p.get("role") in roles_cle)
-        for cle_poste, n in postes.items():
-            n_max = max(n.values()) if isinstance(n, dict) else n
-            if n_max > 0 and n_agents == 0:
-                avertissements.append(
-                    f"{cle} : effectif min {n} mais aucun agent des rôles {roles_cle} dans la liste.")
-    return avertissements
+    # Prévenir (sans bloquer) si un effectif minimum dépasse l'effectif réel du groupe.
+    return avertissements_planchers(effectifs_min, personnel)
 
 
 # ── Résolution ──────────────────────────────────────────────────────────

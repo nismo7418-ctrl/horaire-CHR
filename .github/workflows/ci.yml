@@ -20,10 +20,13 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Compile
-        run: python -m py_compile app.py llm.py solveur.py config.py state.py backtest.py auth.py exporter.py
+        run: python -m py_compile app.py llm.py solveur.py config.py state.py backtest.py auth.py exporter.py arbitre.py
 
       - name: Tests
         run: |
           python test_solveur.py
+          python test_diagnostic.py
           python test_p3.py
+          python test_arbitre.py
           python test_app.py
+          python test_llm.py   # SKIP (exit 0) si LM Studio est injoignable

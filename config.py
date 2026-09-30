@@ -158,3 +158,10 @@ JOURS_SEMAINE = {"lun": 0, "mar": 1, "mer": 2, "jeu": 3, "ven": 4, "sam": 5, "di
 # Paramètres de résolution.
 TIME_LIMIT_S = 30
 WORKERS = 8
+
+# ── Diagnostic déterministe (diagnostic.py) — seuils d'analyse « comme un humain » ──
+NUITS_CONSECUTIVES_MAX = 2     # 3 nuits d'affilée ou plus → alerte (fatigue / rotation)
+EQUITE_ECART_MAX = 4           # au sein d'un rôle : max-min de nuits >= 4 → alerte équité
+EQUITE_WKND_ECART_MAX = 3      # au sein d'un rôle : max-min de jours week-end >= 3 → alerte
+NUITS_CUMULEES_MAX = 14        # mois précédent + mois courant >= 14 nuits → alerte (mémoire inter-mois)
+WKND_CUMULES_MAX = 8          # mois précédent + mois courant >= 8 jours week-end → alerte

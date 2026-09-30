@@ -139,9 +139,17 @@ RÈGLES STRICTES :
 4. Vérifie et signale explicitement toute rotation inéquitable détectable dans les données
    fournies (ex: une personne cumule nettement plus de nuits ou de week-ends que la moyenne
    du groupe de même rôle) — sans supposer de cause que les données ne montrent pas.
-5. Ne fais jamais de recommandation qui contredirait une contrainte dure marquée comme telle
+5. Si le champ « diagnostic_deterministe » est fourni : c'est une analyse FACTUELLE du planning
+   (chiffres mesurés par le logiciel, pas des suppositions). Tes explications doivent s'appuyer
+   dessus : reprends dans « alertes_equite » les alertes « equite » et « memore_inter_mois »
+   avec leurs chiffres exacts (écarts, cumulés 2 mois, initiales des agents) et leur nature de
+   fait mesuré — ne les reformule jamais en « cause probable ». Les alertes « nuits_consecutives »
+   vont dans « resume_global » ou « alertes_equite » selon leur poids ; celles de « soldes » dans
+   « ecarts_temps_signales » (cause : solde reporté + heures planifiées).
+   (les règles 5 et 6 ci-dessous deviennent 6 et 7)
+6. Ne fais jamais de recommandation qui contredirait une contrainte dure marquée comme telle
    dans les données (repos légal, effectif minimum).
-6. Réponds en JSON selon le schéma, avec des champs texte en français clair, factuel, sans
+7. Réponds en JSON selon le schéma, avec des champs texte en français clair, factuel, sans
    emphase inutile :
 
 {
@@ -239,7 +247,7 @@ def _appeler(system_prompt: str, contexte: dict, max_tokens: int = 2000) -> dict
         # les modèles non concernés.
         "chat_template_kwargs": {"enable_thinking": False},
     }
-    try:
+    def _http() -> str:
         try:
             r = requests.post(LMSTUDIO_URL, json=body, timeout=_timeout_s())
         except requests.ConnectionError:
@@ -253,7 +261,17 @@ def _appeler(system_prompt: str, contexte: dict, max_tokens: int = 2000) -> dict
         if not texte:
             # Filet de sécurité si le modèle a tout mis dans la réflexion.
             texte = (msg.get("reasoning_content") or "").strip()
-        return _extraire_json(texte)
+        return texte
+
+    try:
+        texte = _http()
+        try:
+            return _extraire_json(texte)
+        except json.JSONDecodeError:
+            # Même prompt, température 0.1 : le modèle reste stochastique et peut
+            # émettre un JSON tronqué/invalide — une nouvelle tentative suffit.
+            time.sleep(1)
+            return _extraire_json(_http())
     except requests.RequestException as e:
         raise ErreurLLM(f"LLM injoignable ({_origine(LMSTUDIO_URL)}) : {e}") from e
     except (KeyError, json.JSONDecodeError) as e:
@@ -331,8 +349,14 @@ def structurer_ajustement(mois: str, legende_codes: dict, initiales: list[str], 
 
 def expliquer_planning(mois: str, legende_codes: dict,
                        planning_result: dict, desiderata: dict,
-                       personnel: list, seuil_ecart_h: float = 8.0) -> dict:
-    """Prompt 2 — explique le planning produit par le solveur. Retourne le dict JSON."""
+                       personnel: list, seuil_ecart_h: float = 8.0,
+                       diagnostic: dict | None = None) -> dict:
+    """Prompt 2 — explique le planning produit par le solveur. Retourne le dict JSON.
+
+    diagnostic (phase « intelligence ») : sortie de diagnostic.diagnostiquer() —
+    analyse déterministe (nuits consécutives, équité, cumuls inter-mois, soldes,
+    stabilité d'habitudes) injectée dans le contexte pour des explications exactes.
+    """
     contexte = {
         "mois": mois,
         "legende_codes": legende_codes,
@@ -355,4 +379,6 @@ def expliquer_planning(mois: str, legende_codes: dict,
             "effectifs_min": "voir données d'entrée (non modifiables)",
         },
     }
+    if diagnostic:
+        contexte["diagnostic_deterministe"] = diagnostic
     return _appeler(PROMPT_ARBITRE, contexte, max_tokens=3000)
